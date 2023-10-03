@@ -4,18 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/1f349/lavender/utils"
 	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
-	"path"
 	"slices"
+	"strings"
 )
 
 // SsoConfig is the base URL for an OAUTH/OPENID/SSO login service
 // The path `/.well-known/openid-configuration` should be available
 type SsoConfig struct {
-	Addr      string `json:"addr"`      // https://login.example.com
-	Namespace string `json:"namespace"` // example.com
+	Addr      utils.JsonUrl `json:"addr"`      // https://login.example.com
+	Namespace string        `json:"namespace"` // example.com
 	Client    struct {
 		ID     string   `json:"id"`
 		Secret string   `json:"secret"`
@@ -24,8 +25,15 @@ type SsoConfig struct {
 }
 
 func (s SsoConfig) FetchConfig() (*WellKnownOIDC, error) {
-	confUrl := path.Join(s.Addr, ".well-known", "openid-configuration")
-	get, err := http.Get(confUrl)
+	// generate openid config url
+	u := s.Addr.String()
+	if !strings.HasSuffix(u, "/") {
+		u += "/"
+	}
+	u += ".well-known/openid-configuration"
+
+	// fetch metadata
+	get, err := http.Get(u)
 	if err != nil {
 		return nil, err
 	}
@@ -93,4 +101,8 @@ func (o WellKnownOIDC) Oauth2Config() oauth2.Config {
 		},
 		Scopes: o.Config.Client.Scopes,
 	}
+}
+
+func (o WellKnownOIDC) ValidReturnUrl(u *url.URL) bool {
+	o.Config.Addr
 }

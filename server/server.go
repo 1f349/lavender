@@ -2,18 +2,26 @@ package server
 
 import (
 	"fmt"
+	"github.com/1f349/cache"
 	"github.com/1f349/lavender/issuer"
 	"github.com/MrMelon54/mjwt"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
+	"net/url"
 	"time"
 )
 
 type HttpServer struct {
-	r       *httprouter.Router
-	baseUrl string
-	manager *issuer.Manager
-	signer  mjwt.Signer
+	r         *httprouter.Router
+	baseUrl   string
+	manager   *issuer.Manager
+	signer    mjwt.Signer
+	flowState *cache.Cache[string, flowStateData]
+}
+
+type flowStateData struct {
+	sso       *issuer.WellKnownOIDC
+	returnUrl *url.URL
 }
 
 func NewHttpServer(listen, baseUrl string, manager *issuer.Manager, signer mjwt.Signer) *http.Server {
