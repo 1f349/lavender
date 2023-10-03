@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
 	"path"
@@ -15,6 +16,11 @@ import (
 type SsoConfig struct {
 	Addr      string `json:"addr"`      // https://login.example.com
 	Namespace string `json:"namespace"` // example.com
+	Client    struct {
+		ID     string   `json:"id"`
+		Secret string   `json:"secret"`
+		Scopes []string `json:"scopes"`
+	} `json:"client"`
 }
 
 func (s SsoConfig) FetchConfig() (*WellKnownOIDC, error) {
@@ -74,4 +80,17 @@ func (o WellKnownOIDC) Validate() error {
 
 	// oidc valid
 	return nil
+}
+
+func (o WellKnownOIDC) Oauth2Config() oauth2.Config {
+	return oauth2.Config{
+		ClientID:     o.Config.Client.ID,
+		ClientSecret: o.Config.Client.Secret,
+		Endpoint: oauth2.Endpoint{
+			AuthURL:   o.AuthorizationEndpoint,
+			TokenURL:  o.TokenEndpoint,
+			AuthStyle: oauth2.AuthStyleInHeader,
+		},
+		Scopes: o.Config.Client.Scopes,
+	}
 }

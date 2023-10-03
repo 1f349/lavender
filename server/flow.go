@@ -2,6 +2,7 @@ package server
 
 import (
 	_ "embed"
+	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"html/template"
 	"log"
@@ -39,11 +40,21 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, pa
 		return
 	}
 
-	login.AuthorizationEndpoint
+	// TODO: save state in sync.Map for quick lookup later
+	state := login.Config.Namespace + "%" + uuid.NewString()
 
-	// https://github.com/go-oauth2/oauth2/blob/master/example/client/client.go
+	oa2conf := login.Oauth2Config()
+	oa2conf.RedirectURL = h.baseUrl + "/callback"
+	nextUrl := oa2conf.AuthCodeURL(state)
+	http.Redirect(rw, req, nextUrl, http.StatusFound)
 }
 
 func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	err := req.ParseForm()
+	if err != nil {
+		http.Error(rw, "Error parsing form", http.StatusBadRequest)
+		return
+	}
 
+	// TODO: process flow callback, parse incoming state
 }

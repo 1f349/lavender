@@ -19,6 +19,14 @@ type HttpServer struct {
 func NewHttpServer(listen, baseUrl string, manager *issuer.Manager, signer mjwt.Signer) *http.Server {
 	r := httprouter.New()
 
+	// remove last slash from baseUrl
+	{
+		l := len(baseUrl)
+		if baseUrl[l-1] == '/' {
+			baseUrl = baseUrl[:l-1]
+		}
+	}
+
 	hs := &HttpServer{
 		r:       r,
 		baseUrl: baseUrl,
