@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"github.com/1f349/cache"
 	"github.com/1f349/lavender/issuer"
+	"github.com/1f349/lavender/utils"
 	"github.com/MrMelon54/mjwt"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
-	"net/url"
 	"time"
 )
 
@@ -17,14 +17,15 @@ type HttpServer struct {
 	manager   *issuer.Manager
 	signer    mjwt.Signer
 	flowState *cache.Cache[string, flowStateData]
+	services  map[string]struct{}
 }
 
 type flowStateData struct {
-	sso       *issuer.WellKnownOIDC
-	returnUrl *url.URL
+	sso          *issuer.WellKnownOIDC
+	targetOrigin string
 }
 
-func NewHttpServer(listen, baseUrl string, manager *issuer.Manager, signer mjwt.Signer) *http.Server {
+func NewHttpServer(listen, baseUrl string, clients []utils.JsonUrl, manager *issuer.Manager, signer mjwt.Signer) *http.Server {
 	r := httprouter.New()
 
 	// remove last slash from baseUrl
@@ -35,11 +36,17 @@ func NewHttpServer(listen, baseUrl string, manager *issuer.Manager, signer mjwt.
 		}
 	}
 
+	services := make(map[string]struct{})
+	for _, i := range clients {
+		services[i.Host] = struct{}{}
+	}
+
 	hs := &HttpServer{
-		r:       r,
-		baseUrl: baseUrl,
-		manager: manager,
-		signer:  signer,
+		r:        r,
+		baseUrl:  baseUrl,
+		manager:  manager,
+		signer:   signer,
+		services: services,
 	}
 
 	r.GET("/", func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {

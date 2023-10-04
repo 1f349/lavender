@@ -2,13 +2,13 @@ package server
 
 import (
 	_ "embed"
+	"encoding/json"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"html/template"
 	"log"
 	"net/http"
-	"net/url"
-	"regexp"
+	"strings"
 	"time"
 )
 
@@ -17,7 +17,9 @@ var (
 	flowPopupHtml     string
 	flowPopupTemplate *template.Template
 
-	isValidState = regexp.MustCompile("^[a-z.]+%[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+	//go:embed flow-callback.go.html
+	flowCallbackHtml     string
+	flowCallbackTemplate *template.Template
 )
 
 func init() {
@@ -26,12 +28,17 @@ func init() {
 		log.Fatal("flow.go: Failed to parse flow popup HTML:", err)
 	}
 	flowPopupTemplate = pageParse
+	pageParse, err = template.New("pages").Parse(flowCallbackHtml)
+	if err != nil {
+		log.Fatal("flow.go: Failed to parse flow callback HTML:", err)
+	}
+	flowCallbackTemplate = pageParse
 }
 
 func (h *HttpServer) flowPopup(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	err := flowPopupTemplate.Execute(rw, map[string]any{
 		"ServiceName": flowPopupTemplate,
-		"Return":      req.URL.Query().Get("return"),
+		"Origin":      req.URL.Query().Get("origin"),
 	})
 	if err != nil {
 		log.Printf("Failed to render page: %s\n", err)
@@ -45,13 +52,9 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 		return
 	}
 
-	returnUrl, err := url.Parse(req.PostFormValue("return"))
-	if err != nil {
-		http.Error(rw, "Invalid return URL", http.StatusBadRequest)
-		return
-	}
-	if !login.ValidReturnUrl(returnUrl) {
-		http.Error(rw, "Invalid return URL for this application", http.StatusBadRequest)
+	targetOrigin := req.PostFormValue("origin")
+	if _, found := h.services[targetOrigin]; !found {
+		http.Error(rw, "Invalid target origin", http.StatusBadRequest)
 		return
 	}
 
@@ -59,11 +62,11 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 	state := login.Config.Namespace + "%" + uuid.NewString()
 	h.flowState.Set(state, flowStateData{
 		login,
-		returnUrl,
+		targetOrigin,
 	}, time.Now().Add(15*time.Minute))
 
 	// generate oauth2 config and redirect to authorize URL
-	oa2conf := login.Oauth2Config()
+	oa2conf := login.OAuth2Config
 	oa2conf.RedirectURL = h.baseUrl + "/callback"
 	nextUrl := oa2conf.AuthCodeURL(state)
 	http.Redirect(rw, req, nextUrl, http.StatusFound)
@@ -78,11 +81,8 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 
 	q := req.URL.Query()
 	state := q.Get("state")
-	if !isValidState.MatchString(state) {
-		http.Error(rw, "Invalid state", http.StatusBadRequest)
-		return
-	}
-	if !h.manager.CheckIssuer(state) {
+	n := strings.IndexByte(state, '%')
+	if !h.manager.CheckNamespace(state[:n]) {
 		http.Error(rw, "Invalid state", http.StatusBadRequest)
 		return
 	}
@@ -92,5 +92,30 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 		return
 	}
 
-	// TODO: process flow callback
+	exchange, err := v.sso.OAuth2Config.Exchange(req.Context(), q.Get("code"))
+	if err != nil {
+		http.Error(rw, "Failed to exchange code", http.StatusInternalServerError)
+		return
+	}
+	client := v.sso.OAuth2Config.Client(req.Context(), exchange)
+	v2, err := client.Get(v.sso.UserInfoEndpoint)
+	if err != nil {
+		http.Error(rw, "Failed to get userinfo", http.StatusInternalServerError)
+		return
+	}
+	defer v2.Body.Close()
+	if v2.StatusCode != http.StatusOK {
+		http.Error(rw, "Failed to get userinfo", http.StatusInternalServerError)
+		return
+	}
+	var v3 any
+	if json.NewDecoder(v2.Body).Decode(&v3) != nil {
+		http.Error(rw, "Failed to decode userinfo JSON", http.StatusInternalServerError)
+		return
+	}
+
+	_ = flowCallbackTemplate.Execute(rw, map[string]any{
+		"TargetOrigin":  v.targetOrigin,
+		"TargetMessage": v3,
+	})
 }

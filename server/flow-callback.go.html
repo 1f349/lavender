@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{{.ServiceName}}</title>
+</head>
+<script>
+    let loginData = {target:{{.TargetOrigin}}, message:{{.LoginData}}};
+    document.addEventListener("load", function () {
+        postMessage(loginData.message, loginData.target);
+        setTimeout(function () {
+            window.close();
+        }, 2000);
+    });
+</script>
+<body>
+<header>
+    <h1>{{.ServiceName}}</h1>
+</header>
+<main>Loading...</main>
+</body>
+</html>
