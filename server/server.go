@@ -12,12 +12,13 @@ import (
 )
 
 type HttpServer struct {
-	r         *httprouter.Router
-	baseUrl   string
-	manager   *issuer.Manager
-	signer    mjwt.Signer
-	flowState *cache.Cache[string, flowStateData]
-	services  map[string]struct{}
+	r           *httprouter.Router
+	baseUrl     string
+	serviceName string
+	manager     *issuer.Manager
+	signer      mjwt.Signer
+	flowState   *cache.Cache[string, flowStateData]
+	services    map[string]struct{}
 }
 
 type flowStateData struct {
@@ -25,7 +26,7 @@ type flowStateData struct {
 	targetOrigin string
 }
 
-func NewHttpServer(listen, baseUrl string, clients []utils.JsonUrl, manager *issuer.Manager, signer mjwt.Signer) *http.Server {
+func NewHttpServer(listen, baseUrl, serviceName string, clients []utils.JsonUrl, manager *issuer.Manager, signer mjwt.Signer) *http.Server {
 	r := httprouter.New()
 
 	// remove last slash from baseUrl
@@ -38,15 +39,17 @@ func NewHttpServer(listen, baseUrl string, clients []utils.JsonUrl, manager *iss
 
 	services := make(map[string]struct{})
 	for _, i := range clients {
-		services[i.Host] = struct{}{}
+		services[i.String()] = struct{}{}
 	}
 
 	hs := &HttpServer{
-		r:        r,
-		baseUrl:  baseUrl,
-		manager:  manager,
-		signer:   signer,
-		services: services,
+		r:           r,
+		baseUrl:     baseUrl,
+		serviceName: serviceName,
+		manager:     manager,
+		signer:      signer,
+		flowState:   cache.New[string, flowStateData](),
+		services:    services,
 	}
 
 	r.GET("/", func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {

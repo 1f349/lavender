@@ -77,7 +77,7 @@ func normalLoad(startUp startUpConfig, wd string) {
 		log.Fatal("[Lavender] Failed to create SSO service manager: ", err)
 	}
 
-	srv := server.NewHttpServer(startUp.Listen, startUp.BaseUrl, startUp.AllowedClients, manager, mSign)
+	srv := server.NewHttpServer(startUp.Listen, startUp.BaseUrl, startUp.ServiceName, startUp.AllowedClients, manager, mSign)
 	log.Printf("[Lavender] Starting HTTP server on '%s'\n", srv.Addr)
 	go utils.RunBackgroundHttp("HTTP", srv)
 

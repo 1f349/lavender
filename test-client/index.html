@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Test Client</title>
+    <script>
+var currentLoginPopup = null;
+
+window.addEventListener("message", function (event) {
+  if (event.origin !== "http:\/\/localhost:9090") return;
+  if (isObject(event.data)) {
+    document.getElementById("someTextArea").textContent = JSON.stringify(event.data, null, 2);
+    if(currentLoginPopup) currentLoginPopup.close();
+    return;
+  }
+  alert("Failed to log user in: the login data was probably corrupted");
+});
+
+function isObject(obj) {
+  return obj != null && obj.constructor.name === "Object"
+}
+
+function popupCenterScreen(url, title, w, h, focus) {
+  const top = (screen.availHeight - h) / 4, left = (screen.availWidth - w) / 2;
+  const popup = openWindow(url, title, `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`);
+  if (focus === true && window.focus) popup.focus();
+  return popup;
+}
+
+function openWindow(url, winnm, options) {
+  var wTop = firstAvailableValue([window.screen.availTop, window.screenY, window.screenTop, 0]);
+  var wLeft = firstAvailableValue([window.screen.availLeft, window.screenX, window.screenLeft, 0]);
+  var top = 0, left = 0;
+  var result;
+  if ((result = /top=(\d+)/g.exec(options))) top = parseInt(result[1]);
+  if ((result = /left=(\d+)/g.exec(options))) left = parseInt(result[1]);
+  if (options) {
+    options = options.replace("top=" + top, "top=" + (parseInt(top) + wTop));
+    options = options.replace("left=" + left, "left=" + (parseInt(left) + wLeft));
+    w = window.open(url, winnm, options);
+  } else w = window.open(url, winnm);
+  return w;
+}
+
+function firstAvailableValue(arr) {
+  for (var i = 0; i < arr.length; i++)
+    if (typeof arr[i] != 'undefined')
+      return arr[i];
+}
+
+function doThisThing() {
+  if(currentLoginPopup) currentLoginPopup.close();
+  currentLoginPopup = popupCenterScreen('http://localhost:9090/popup?origin='+encodeURIComponent("http://localhost:2020"), 'Login with Lavender', 500, 500, false);
+}
+    </script>
+    <style>
+#someTextArea {
+  width: 400px;
+  height: 400px;
+}
+    </style>
+</head>
+<body>
+<header>
+    <h1>Test Client</h1>
+</header>
+<main>
+    <div>
+        <button onclick="doThisThing();">Login</button>
+    </div>
+    <div>
+        <textarea id="someTextArea"></textarea>
+    </div>
+</main>
+</body>
+</html>

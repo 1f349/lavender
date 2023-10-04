@@ -2,20 +2,17 @@
 <html lang="en">
 <head>
     <title>{{.ServiceName}}</title>
+    <script>
+        let loginData = {target:{{.TargetOrigin}}, message:{{.TargetMessage}}};
+        window.addEventListener("load", function () {
+            window.opener.postMessage(loginData.message, loginData.target);
+        });
+    </script>
 </head>
-<script>
-    let loginData = {target:{{.TargetOrigin}}, message:{{.LoginData}}};
-    document.addEventListener("load", function () {
-        postMessage(loginData.message, loginData.target);
-        setTimeout(function () {
-            window.close();
-        }, 2000);
-    });
-</script>
 <body>
 <header>
     <h1>{{.ServiceName}}</h1>
 </header>
-<main>Loading...</main>
+<main id="mainBody">Loading...</main>
 </body>
 </html>

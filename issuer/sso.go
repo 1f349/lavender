@@ -46,6 +46,7 @@ func (s SsoConfig) FetchConfig() (*WellKnownOIDC, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.Config = s
 	c.OAuth2Config = oauth2.Config{
 		ClientID:     c.Config.Client.ID,
 		ClientSecret: c.Config.Client.Secret,
