@@ -5,6 +5,9 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"github.com/MrMelon54/mjwt/auth"
+	"github.com/MrMelon54/mjwt/claims"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/oauth2"
@@ -117,18 +120,47 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 		http.Error(rw, "Failed to get userinfo", http.StatusInternalServerError)
 		return
 	}
-	var v3 any
-	if json.NewDecoder(v2.Body).Decode(&v3) != nil {
+
+	var v3 map[string]any
+	if err = json.NewDecoder(v2.Body).Decode(&v3); err != nil {
 		fmt.Println("Failed to decode userinfo:", err)
 		http.Error(rw, "Failed to decode userinfo JSON", http.StatusInternalServerError)
 		return
 	}
 
-	// TODO: generate signed mjwt object
+	sub, ok := v3["sub"].(string)
+	if !ok {
+		http.Error(rw, "Invalid value in userinfo", http.StatusInternalServerError)
+		return
+	}
+	aud, ok := v3["aud"].(string)
+	if !ok {
+		http.Error(rw, "Invalid value in userinfo", http.StatusInternalServerError)
+		return
+	}
+
+	ps := claims.NewPermStorage()
+	nsSub := sub + "@" + v.sso.Config.Namespace
+	ati := uuid.NewString()
+	accessToken, err := h.signer.GenerateJwt(nsSub, ati, jwt.ClaimStrings{aud}, 15*time.Minute, auth.AccessTokenClaims{
+		Perms: ps,
+	})
+	if err != nil {
+		http.Error(rw, "Error generating access token", http.StatusInternalServerError)
+		return
+	}
+
+	refreshToken, err := h.signer.GenerateJwt(nsSub, uuid.NewString(), jwt.ClaimStrings{aud}, 15*time.Minute, auth.RefreshTokenClaims{AccessTokenId: ati})
+	if err != nil {
+		http.Error(rw, "Error generating refresh token", http.StatusInternalServerError)
+		return
+	}
 
 	_ = flowCallbackTemplate.Execute(rw, map[string]any{
 		"ServiceName":   h.serviceName,
 		"TargetOrigin":  v.targetOrigin,
 		"TargetMessage": v3,
+		"AccessToken":   accessToken,
+		"RefreshToken":  refreshToken,
 	})
 }

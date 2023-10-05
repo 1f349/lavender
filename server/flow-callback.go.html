@@ -3,9 +3,16 @@
 <head>
     <title>{{.ServiceName}}</title>
     <script>
-        let loginData = {target:{{.TargetOrigin}}, message:{{.TargetMessage}}};
+        let loginData = {
+            target:{{.TargetOrigin}},
+            userinfo:{{.TargetMessage}},
+            tokens: {
+                access:{{.AccessToken}},
+                refresh:{{.RefreshToken}},
+            },
+        };
         window.addEventListener("load", function () {
-            window.opener.postMessage(loginData.message, loginData.target);
+            window.opener.postMessage(loginData, loginData.target);
         });
     </script>
 </head>
