@@ -22,7 +22,7 @@ func testBody() io.ReadCloser {
 	return io.NopCloser(strings.NewReader("{}"))
 }
 
-func TestManager_CheckIssuer(t *testing.T) {
+func TestManager_CheckNamespace(t *testing.T) {
 	httpGet = func(url string) (resp *http.Response, err error) {
 		return &http.Response{StatusCode: http.StatusOK, Body: testBody()}, nil
 	}

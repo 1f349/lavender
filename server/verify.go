@@ -24,7 +24,7 @@ func (h *HttpServer) verifyHandler(rw http.ResponseWriter, req *http.Request, _ 
 	}
 
 	// check issuer against config
-	if b.Issuer != h.baseUrl {
+	if b.Issuer != h.conf.Issuer {
 		http.Error(rw, "Invalid issuer", http.StatusBadRequest)
 		return
 	}

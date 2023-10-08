@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"flag"
-	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/server"
 	"github.com/1f349/violet/utils"
 	exit_reload "github.com/MrMelon54/exit-reload"
@@ -50,7 +49,7 @@ func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{})
 		return subcommands.ExitFailure
 	}
 
-	var config startUpConfig
+	var config server.Conf
 	err = json.NewDecoder(openConf).Decode(&config)
 	if err != nil {
 		log.Println("[Lavender] Error: invalid config file: ", err)
@@ -66,18 +65,13 @@ func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{})
 	return subcommands.ExitSuccess
 }
 
-func normalLoad(startUp startUpConfig, wd string) {
+func normalLoad(startUp server.Conf, wd string) {
 	mSign, err := mjwt.NewMJwtSignerFromFileOrCreate(startUp.Issuer, filepath.Join(wd, "lavender.private.key"), rand.Reader, 4096)
 	if err != nil {
 		log.Fatal("[Lavender] Failed to load or create MJWT signer:", err)
 	}
 
-	manager, err := issuer.NewManager(startUp.SsoServices)
-	if err != nil {
-		log.Fatal("[Lavender] Failed to create SSO service manager: ", err)
-	}
-
-	srv := server.NewHttpServer(startUp.Listen, startUp.BaseUrl, startUp.ServiceName, startUp.AllowedClients, manager, mSign)
+	srv := server.NewHttpServer(startUp, mSign)
 	log.Printf("[Lavender] Starting HTTP server on '%s'\n", srv.Addr)
 	go utils.RunBackgroundHttp("HTTP", srv)
 

@@ -4,21 +4,20 @@ import (
 	"fmt"
 	"github.com/1f349/cache"
 	"github.com/1f349/lavender/issuer"
-	"github.com/1f349/lavender/utils"
 	"github.com/MrMelon54/mjwt"
 	"github.com/julienschmidt/httprouter"
+	"log"
 	"net/http"
 	"time"
 )
 
 type HttpServer struct {
-	r           *httprouter.Router
-	baseUrl     string
-	serviceName string
-	manager     *issuer.Manager
-	signer      mjwt.Signer
-	flowState   *cache.Cache[string, flowStateData]
-	services    map[string]struct{}
+	r         *httprouter.Router
+	conf      Conf
+	manager   *issuer.Manager
+	signer    mjwt.Signer
+	flowState *cache.Cache[string, flowStateData]
+	services  map[string]struct{}
 }
 
 type flowStateData struct {
@@ -26,30 +25,34 @@ type flowStateData struct {
 	targetOrigin string
 }
 
-func NewHttpServer(listen, baseUrl, serviceName string, clients []utils.JsonUrl, manager *issuer.Manager, signer mjwt.Signer) *http.Server {
+func NewHttpServer(conf Conf, signer mjwt.Signer) *http.Server {
 	r := httprouter.New()
 
 	// remove last slash from baseUrl
 	{
-		l := len(baseUrl)
-		if baseUrl[l-1] == '/' {
-			baseUrl = baseUrl[:l-1]
+		l := len(conf.BaseUrl)
+		if conf.BaseUrl[l-1] == '/' {
+			conf.BaseUrl = conf.BaseUrl[:l-1]
 		}
 	}
 
+	manager, err := issuer.NewManager(conf.SsoServices)
+	if err != nil {
+		log.Fatal("[Lavender] Failed to create SSO service manager: ", err)
+	}
+
 	services := make(map[string]struct{})
-	for _, i := range clients {
+	for _, i := range conf.AllowedClients {
 		services[i.String()] = struct{}{}
 	}
 
 	hs := &HttpServer{
-		r:           r,
-		baseUrl:     baseUrl,
-		serviceName: serviceName,
-		manager:     manager,
-		signer:      signer,
-		flowState:   cache.New[string, flowStateData](),
-		services:    services,
+		r:         r,
+		conf:      conf,
+		manager:   manager,
+		signer:    signer,
+		flowState: cache.New[string, flowStateData](),
+		services:  services,
 	}
 
 	r.GET("/", func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -62,7 +65,7 @@ func NewHttpServer(listen, baseUrl, serviceName string, clients []utils.JsonUrl,
 	r.GET("/callback", hs.flowCallback)
 
 	return &http.Server{
-		Addr:              listen,
+		Addr:              conf.Listen,
 		Handler:           r,
 		ReadTimeout:       time.Minute,
 		ReadHeaderTimeout: time.Minute,

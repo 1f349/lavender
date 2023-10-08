@@ -18,16 +18,6 @@ import (
 	"time"
 )
 
-var (
-	//go:embed flow-popup.go.html
-	flowPopupHtml     string
-	flowPopupTemplate *template.Template
-
-	//go:embed flow-callback.go.html
-	flowCallbackHtml     string
-	flowCallbackTemplate *template.Template
-)
-
 func init() {
 	pageParse, err := template.New("pages").Parse(flowPopupHtml)
 	if err != nil {
@@ -44,7 +34,7 @@ func init() {
 
 func (h *HttpServer) flowPopup(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	err := flowPopupTemplate.Execute(rw, map[string]any{
-		"ServiceName": h.serviceName,
+		"ServiceName": h.conf.ServiceName,
 		"Origin":      req.URL.Query().Get("origin"),
 	})
 	if err != nil {
@@ -75,7 +65,7 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 
 	// generate oauth2 config and redirect to authorize URL
 	oa2conf := login.OAuth2Config
-	oa2conf.RedirectURL = h.baseUrl + "/callback"
+	oa2conf.RedirectURL = h.conf.BaseUrl + "/callback"
 	nextUrl := oa2conf.AuthCodeURL(state, oauth2.SetAuthURLParam("login_name", loginName))
 	http.Redirect(rw, req, nextUrl, http.StatusFound)
 }
@@ -101,7 +91,7 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 	}
 
 	oa2conf := v.sso.OAuth2Config
-	oa2conf.RedirectURL = h.baseUrl + "/callback"
+	oa2conf.RedirectURL = h.conf.BaseUrl + "/callback"
 	exchange, err := oa2conf.Exchange(context.Background(), q.Get("code"))
 	if err != nil {
 		fmt.Println("Failed exchange:", err)
@@ -157,7 +147,7 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 	}
 
 	_ = flowCallbackTemplate.Execute(rw, map[string]any{
-		"ServiceName":   h.serviceName,
+		"ServiceName":   h.conf.ServiceName,
 		"TargetOrigin":  v.targetOrigin,
 		"TargetMessage": v3,
 		"AccessToken":   accessToken,
