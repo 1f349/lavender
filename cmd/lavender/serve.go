@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"github.com/1f349/lavender/server"
+	"github.com/1f349/lavender/server/pages"
 	"github.com/1f349/violet/utils"
 	exit_reload "github.com/MrMelon54/exit-reload"
 	"github.com/MrMelon54/mjwt"
@@ -69,6 +70,11 @@ func normalLoad(startUp server.Conf, wd string) {
 	mSign, err := mjwt.NewMJwtSignerFromFileOrCreate(startUp.Issuer, filepath.Join(wd, "lavender.private.key"), rand.Reader, 4096)
 	if err != nil {
 		log.Fatal("[Lavender] Failed to load or create MJWT signer:", err)
+	}
+
+	err = pages.LoadPages(wd)
+	if err != nil {
+		log.Fatal("[Lavender] Failed to load page templates:", err)
 	}
 
 	srv := server.NewHttpServer(startUp, mSign)
