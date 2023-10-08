@@ -12,20 +12,20 @@ import (
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/oauth2"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 )
 
+var uuidNewStringState = uuid.NewString
+var uuidNewStringAti = uuid.NewString
+var uuidNewStringRti = uuid.NewString
+
 func (h *HttpServer) flowPopup(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	err := pages.FlowTemplates.Execute(rw, map[string]any{
+	pages.RenderPageTemplate(rw, "flow-popup", map[string]any{
 		"ServiceName": h.conf.ServiceName,
 		"Origin":      req.URL.Query().Get("origin"),
 	})
-	if err != nil {
-		log.Printf("Failed to render page: %s\n", err)
-	}
 }
 
 func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -43,7 +43,7 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 	}
 
 	// save state for use later
-	state := login.Config.Namespace + ":" + uuid.NewString()
+	state := login.Config.Namespace + ":" + uuidNewStringState()
 	h.flowState.Set(state, flowStateData{
 		login,
 		targetOrigin,
@@ -117,7 +117,7 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 
 	ps := claims.NewPermStorage()
 	nsSub := sub + "@" + v.sso.Config.Namespace
-	ati := uuid.NewString()
+	ati := uuidNewStringAti()
 	accessToken, err := h.signer.GenerateJwt(nsSub, ati, jwt.ClaimStrings{aud}, 15*time.Minute, auth.AccessTokenClaims{
 		Perms: ps,
 	})
@@ -126,13 +126,13 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 		return
 	}
 
-	refreshToken, err := h.signer.GenerateJwt(nsSub, uuid.NewString(), jwt.ClaimStrings{aud}, 15*time.Minute, auth.RefreshTokenClaims{AccessTokenId: ati})
+	refreshToken, err := h.signer.GenerateJwt(nsSub, uuidNewStringRti(), jwt.ClaimStrings{aud}, 15*time.Minute, auth.RefreshTokenClaims{AccessTokenId: ati})
 	if err != nil {
 		http.Error(rw, "Error generating refresh token", http.StatusInternalServerError)
 		return
 	}
 
-	_ = pages.FlowTemplates.Execute(rw, map[string]any{
+	pages.RenderPageTemplate(rw, "flow-callback", map[string]any{
 		"ServiceName":   h.conf.ServiceName,
 		"TargetOrigin":  v.targetOrigin,
 		"TargetMessage": v3,
