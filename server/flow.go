@@ -5,35 +5,21 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"github.com/1f349/lavender/server/pages"
 	"github.com/MrMelon54/mjwt/auth"
 	"github.com/MrMelon54/mjwt/claims"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/oauth2"
-	"html/template"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 )
 
-func init() {
-	pageParse, err := template.New("pages").Parse(flowPopupHtml)
-	if err != nil {
-		log.Fatal("flow.go: Failed to parse flow popup HTML:", err)
-	}
-	flowPopupTemplate = pageParse
-
-	pageParse, err = template.New("pages").Parse(flowCallbackHtml)
-	if err != nil {
-		log.Fatal("flow.go: Failed to parse flow callback HTML:", err)
-	}
-	flowCallbackTemplate = pageParse
-}
-
 func (h *HttpServer) flowPopup(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	err := flowPopupTemplate.Execute(rw, map[string]any{
+	err := pages.FlowTemplates.Execute(rw, map[string]any{
 		"ServiceName": h.conf.ServiceName,
 		"Origin":      req.URL.Query().Get("origin"),
 	})
@@ -57,7 +43,7 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 	}
 
 	// save state for use later
-	state := login.Config.Namespace + "%" + uuid.NewString()
+	state := login.Config.Namespace + ":" + uuid.NewString()
 	h.flowState.Set(state, flowStateData{
 		login,
 		targetOrigin,
@@ -79,7 +65,7 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 
 	q := req.URL.Query()
 	state := q.Get("state")
-	n := strings.IndexByte(state, '%')
+	n := strings.IndexByte(state, ':')
 	if !h.manager.CheckNamespace(state[:n]) {
 		http.Error(rw, "Invalid state", http.StatusBadRequest)
 		return
@@ -146,7 +132,7 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 		return
 	}
 
-	_ = flowCallbackTemplate.Execute(rw, map[string]any{
+	_ = pages.FlowTemplates.Execute(rw, map[string]any{
 		"ServiceName":   h.conf.ServiceName,
 		"TargetOrigin":  v.targetOrigin,
 		"TargetMessage": v3,

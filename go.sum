@@ -1,6 +1,8 @@
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/1f349/cache v0.0.2 h1:27QD6zPd9xYyvh9V1qqWq+EAt5+N+qvyGWKfnjMrhP8=
 github.com/1f349/cache v0.0.2/go.mod h1:LibAMy13dF0KO1fQA9aEjZPBCB6Y4b5kKYEQJUqc2rQ=
+github.com/1f349/overlapfs v0.0.1 h1:LAxBolrXFAgU0yqZtXg/C/aaPq3eoQSPpBc49BHuTp0=
+github.com/1f349/overlapfs v0.0.1/go.mod h1:I6aItQycr7nrzplmfNXp/QF9tTmKRSgY3fXmu/7Ky2o=
 github.com/1f349/violet v0.0.10 h1:2HuQq7SddV60JZ4Xr7DmmhTOPbjiF+1Uqk+d6O1f18U=
 github.com/1f349/violet v0.0.10/go.mod h1:Uzu6I1pLBP5UEzcUCTQBbk/NTfI5TAABSrowa8DSpR0=
 github.com/MrMelon54/exit-reload v0.0.1 h1:sxHa59tNEQMcikwuX2+93lw6Vi1+R7oCRF8a0C3alXc=
