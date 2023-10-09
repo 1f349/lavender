@@ -72,8 +72,7 @@ func normalLoad(startUp server.Conf, wd string) {
 		log.Fatal("[Lavender] Failed to load or create MJWT signer:", err)
 	}
 
-	err = pages.LoadPages(wd)
-	if err != nil {
+	if err := pages.LoadPages(wd); err != nil {
 		log.Fatal("[Lavender] Failed to load page templates:", err)
 	}
 
