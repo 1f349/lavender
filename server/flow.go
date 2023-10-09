@@ -76,7 +76,7 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 	q := req.URL.Query()
 	state := q.Get("state")
 	n := strings.IndexByte(state, ':')
-	if !h.manager.CheckNamespace(state[:n]) {
+	if n == -1 || !h.manager.CheckNamespace(state[:n]) {
 		http.Error(rw, "Invalid state namespace", http.StatusBadRequest)
 		return
 	}

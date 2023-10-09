@@ -3,6 +3,7 @@ package pages
 import (
 	"embed"
 	_ "embed"
+	"errors"
 	"github.com/1f349/overlapfs"
 	"html/template"
 	"io"
@@ -26,7 +27,7 @@ func LoadPages(wd string) (err error) {
 		if wd != "" {
 			wwwDir := filepath.Join(wd, "www")
 			err = os.Mkdir(wwwDir, os.ModePerm)
-			if err != nil {
+			if err != nil && !errors.Is(err, os.ErrExist) {
 				return
 			}
 			wdFs := os.DirFS(wwwDir)
