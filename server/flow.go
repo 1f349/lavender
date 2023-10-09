@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/server/pages"
 	"github.com/MrMelon54/mjwt/auth"
 	"github.com/MrMelon54/mjwt/claims"
@@ -20,6 +21,15 @@ import (
 var uuidNewStringState = uuid.NewString
 var uuidNewStringAti = uuid.NewString
 var uuidNewStringRti = uuid.NewString
+
+var testOa2Exchange = func(oa2conf oauth2.Config, ctx context.Context, code string) (*oauth2.Token, error) {
+	return oa2conf.Exchange(ctx, code)
+}
+
+var testOa2UserInfo = func(oidc *issuer.WellKnownOIDC, ctx context.Context, exchange *oauth2.Token) (*http.Response, error) {
+	client := oidc.OAuth2Config.Client(ctx, exchange)
+	return client.Get(oidc.UserInfoEndpoint)
+}
 
 func (h *HttpServer) flowPopup(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	pages.RenderPageTemplate(rw, "flow-popup", map[string]any{
@@ -67,7 +77,7 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 	state := q.Get("state")
 	n := strings.IndexByte(state, ':')
 	if !h.manager.CheckNamespace(state[:n]) {
-		http.Error(rw, "Invalid state", http.StatusBadRequest)
+		http.Error(rw, "Invalid state namespace", http.StatusBadRequest)
 		return
 	}
 	v, found := h.flowState.Get(state)
@@ -78,14 +88,13 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 
 	oa2conf := v.sso.OAuth2Config
 	oa2conf.RedirectURL = h.conf.BaseUrl + "/callback"
-	exchange, err := oa2conf.Exchange(context.Background(), q.Get("code"))
+	exchange, err := testOa2Exchange(oa2conf, context.Background(), q.Get("code"))
 	if err != nil {
 		fmt.Println("Failed exchange:", err)
 		http.Error(rw, "Failed to exchange code", http.StatusInternalServerError)
 		return
 	}
-	client := v.sso.OAuth2Config.Client(req.Context(), exchange)
-	v2, err := client.Get(v.sso.UserInfoEndpoint)
+	v2, err := testOa2UserInfo(v.sso, req.Context(), exchange)
 	if err != nil {
 		fmt.Println("Failed to get userinfo:", err)
 		http.Error(rw, "Failed to get userinfo", http.StatusInternalServerError)
@@ -93,25 +102,25 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 	}
 	defer v2.Body.Close()
 	if v2.StatusCode != http.StatusOK {
-		http.Error(rw, "Failed to get userinfo", http.StatusInternalServerError)
+		http.Error(rw, "Failed to get userinfo: unexpected status code", http.StatusInternalServerError)
 		return
 	}
 
 	var v3 map[string]any
 	if err = json.NewDecoder(v2.Body).Decode(&v3); err != nil {
 		fmt.Println("Failed to decode userinfo:", err)
-		http.Error(rw, "Failed to decode userinfo JSON", http.StatusInternalServerError)
+		http.Error(rw, "Failed to decode userinfo", http.StatusInternalServerError)
 		return
 	}
 
 	sub, ok := v3["sub"].(string)
 	if !ok {
-		http.Error(rw, "Invalid value in userinfo", http.StatusInternalServerError)
+		http.Error(rw, "Invalid subject in userinfo", http.StatusInternalServerError)
 		return
 	}
 	aud, ok := v3["aud"].(string)
 	if !ok {
-		http.Error(rw, "Invalid value in userinfo", http.StatusInternalServerError)
+		http.Error(rw, "Invalid audience in userinfo", http.StatusInternalServerError)
 		return
 	}
 

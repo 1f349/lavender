@@ -30,13 +30,13 @@ func NewManager(services []SsoConfig) (*Manager, error) {
 	return l, nil
 }
 
-func NewManagerForTests(services []WellKnownOIDC) *Manager {
+func NewManagerForTests(services []*WellKnownOIDC) *Manager {
 	l := &Manager{m: make(map[string]*WellKnownOIDC, len(services))}
 	for _, i := range services {
 		if !isValidNamespace.MatchString(i.Config.Namespace) {
 			panic("Invalid namespace in tests")
 		}
-		l.m[i.Config.Namespace] = &i
+		l.m[i.Config.Namespace] = i
 	}
 	return l
 }
