@@ -157,7 +157,7 @@ func TestFlowPopupPost(t *testing.T) {
 	assert.Equal(t, "", rec.Body.String())
 	assert.Equal(t, loginDomain+"/authorize?"+url.Values{
 		"client_id":     []string{"test-id"},
-		"login_name":    []string{"test@example.com"},
+		"login_name":    []string{"test"},
 		"redirect_uri":  []string{lavenderDomain + "/callback"},
 		"response_type": []string{"code"},
 		"state":         []string{"example.com:" + nextState},
