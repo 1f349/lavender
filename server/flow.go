@@ -14,6 +14,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/oauth2"
 	"net/http"
+	"net/mail"
 	"strings"
 	"time"
 )
@@ -45,6 +46,9 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 		http.Error(rw, "No login service defined for this username", http.StatusBadRequest)
 		return
 	}
+	// the @ must exist if the service is defined
+	n := strings.IndexByte(loginName, '@')
+	loginUn := loginName[:n]
 
 	targetOrigin := req.PostFormValue("origin")
 	if _, found := h.services[targetOrigin]; !found {
@@ -62,7 +66,7 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 	// generate oauth2 config and redirect to authorize URL
 	oa2conf := login.OAuth2Config
 	oa2conf.RedirectURL = h.conf.BaseUrl + "/callback"
-	nextUrl := oa2conf.AuthCodeURL(state, oauth2.SetAuthURLParam("login_name", loginName))
+	nextUrl := oa2conf.AuthCodeURL(state, oauth2.SetAuthURLParam("login_name", loginUn))
 	http.Redirect(rw, req, nextUrl, http.StatusFound)
 }
 
@@ -125,6 +129,26 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 	}
 
 	ps := claims.NewPermStorage()
+
+	if verified, ok := v3["email_verified"].(bool); ok && verified {
+		if mailAddress, ok := v3["email"].(string); ok {
+			address, err := mail.ParseAddress(mailAddress)
+			if err != nil {
+				http.Error(rw, "Invalid email in userinfo", http.StatusInternalServerError)
+				return
+			}
+			n := strings.IndexByte(address.Address, '@')
+			if n == -1 {
+				goto noEmailSupport
+			}
+			if address.Address[n+1:] != v.sso.Config.Namespace {
+				goto noEmailSupport
+			}
+			ps.Set("mail-client")
+		}
+	}
+
+noEmailSupport:
 	nsSub := sub + "@" + v.sso.Config.Namespace
 	ati := uuidNewStringAti()
 	accessToken, err := h.signer.GenerateJwt(nsSub, ati, jwt.ClaimStrings{aud}, 15*time.Minute, auth.AccessTokenClaims{

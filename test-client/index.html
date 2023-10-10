@@ -3,60 +3,82 @@
 <head>
     <title>Test Client</title>
     <script>
-var currentLoginPopup = null;
+        let currentLoginPopup = null;
 
-window.addEventListener("message", function (event) {
-  if (event.origin !== "http:\/\/localhost:9090") return;
-  if (isObject(event.data)) {
-    document.getElementById("someTextArea").textContent = JSON.stringify(event.data, null, 2);
-    if(currentLoginPopup) currentLoginPopup.close();
-    return;
-  }
-  alert("Failed to log user in: the login data was probably corrupted");
-});
+        window.addEventListener("message", function (event) {
+            if (event.origin !== "http:\/\/localhost:9090") return;
+            if (isObject(event.data)) {
+                document.getElementById("someTextArea").textContent = JSON.stringify(event.data, null, 2);
+                let perms = document.getElementById("somePerms");
+                perms.childNodes.forEach(function (x) {
+                    x.clear();
+                });
+                let jwt = parseJwt(event.data.tokens.access);
+                if (jwt.per != null) {
+                    jwt.per.forEach(function (x) {
+                        let a = document.createElement("li");
+                        a.textContent = x;
+                        perms.appendChild(a);
+                    });
+                }
 
-function isObject(obj) {
-  return obj != null && obj.constructor.name === "Object"
-}
+                if (currentLoginPopup) currentLoginPopup.close();
+                return;
+            }
+            alert("Failed to log user in: the login data was probably corrupted");
+        });
 
-function popupCenterScreen(url, title, w, h, focus) {
-  const top = (screen.availHeight - h) / 4, left = (screen.availWidth - w) / 2;
-  const popup = openWindow(url, title, `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`);
-  if (focus === true && window.focus) popup.focus();
-  return popup;
-}
+        function parseJwt(token) {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        }
 
-function openWindow(url, winnm, options) {
-  var wTop = firstAvailableValue([window.screen.availTop, window.screenY, window.screenTop, 0]);
-  var wLeft = firstAvailableValue([window.screen.availLeft, window.screenX, window.screenLeft, 0]);
-  var top = 0, left = 0;
-  var result;
-  if ((result = /top=(\d+)/g.exec(options))) top = parseInt(result[1]);
-  if ((result = /left=(\d+)/g.exec(options))) left = parseInt(result[1]);
-  if (options) {
-    options = options.replace("top=" + top, "top=" + (parseInt(top) + wTop));
-    options = options.replace("left=" + left, "left=" + (parseInt(left) + wLeft));
-    w = window.open(url, winnm, options);
-  } else w = window.open(url, winnm);
-  return w;
-}
+        function isObject(obj) {
+            return obj != null && obj.constructor.name === "Object"
+        }
 
-function firstAvailableValue(arr) {
-  for (var i = 0; i < arr.length; i++)
-    if (typeof arr[i] != 'undefined')
-      return arr[i];
-}
+        function popupCenterScreen(url, title, w, h, focus) {
+            const top = (screen.availHeight - h) / 4, left = (screen.availWidth - w) / 2;
+            const popup = openWindow(url, title, `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`);
+            if (focus === true && window.focus) popup.focus();
+            return popup;
+        }
 
-function doThisThing() {
-  if(currentLoginPopup) currentLoginPopup.close();
-  currentLoginPopup = popupCenterScreen('http://localhost:9090/popup?origin='+encodeURIComponent("http://localhost:2020"), 'Login with Lavender', 500, 500, false);
-}
+        function openWindow(url, winnm, options) {
+            var wTop = firstAvailableValue([window.screen.availTop, window.screenY, window.screenTop, 0]);
+            var wLeft = firstAvailableValue([window.screen.availLeft, window.screenX, window.screenLeft, 0]);
+            var top = 0, left = 0;
+            var result;
+            if ((result = /top=(\d+)/g.exec(options))) top = parseInt(result[1]);
+            if ((result = /left=(\d+)/g.exec(options))) left = parseInt(result[1]);
+            if (options) {
+                options = options.replace("top=" + top, "top=" + (parseInt(top) + wTop));
+                options = options.replace("left=" + left, "left=" + (parseInt(left) + wLeft));
+                w = window.open(url, winnm, options);
+            } else w = window.open(url, winnm);
+            return w;
+        }
+
+        function firstAvailableValue(arr) {
+            for (var i = 0; i < arr.length; i++)
+                if (typeof arr[i] != 'undefined')
+                    return arr[i];
+        }
+
+        function doThisThing() {
+            if (currentLoginPopup) currentLoginPopup.close();
+            currentLoginPopup = popupCenterScreen('http://localhost:9090/popup?origin=' + encodeURIComponent("http://localhost:2020"), 'Login with Lavender', 500, 500, false);
+        }
     </script>
     <style>
-#someTextArea {
-  width: 400px;
-  height: 400px;
-}
+        #someTextArea {
+            width: 400px;
+            height: 400px;
+        }
     </style>
 </head>
 <body>
@@ -67,8 +89,14 @@ function doThisThing() {
     <div>
         <button onclick="doThisThing();">Login</button>
     </div>
-    <div>
-        <textarea id="someTextArea"></textarea>
+    <div style="display:flex; gap: 2em;">
+        <div>
+            <label for="someTextArea"></label><textarea id="someTextArea"></textarea>
+        </div>
+        <div>
+            <p>Permissions:</p>
+            <ul id="somePerms"></ul>
+        </div>
     </div>
 </main>
 </body>
