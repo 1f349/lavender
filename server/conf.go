@@ -12,4 +12,5 @@ type Conf struct {
 	Issuer         string             `json:"issuer"`
 	SsoServices    []issuer.SsoConfig `json:"sso_services"`
 	AllowedClients []utils.JsonUrl    `json:"allowed_clients"`
+	Permissions    []string           `json:"permissions"`
 }

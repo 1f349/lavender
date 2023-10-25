@@ -129,6 +129,9 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 	}
 
 	ps := claims.NewPermStorage()
+	for _, i := range h.conf.Permissions {
+		ps.Set(i)
+	}
 
 	if verified, ok := v3["email_verified"].(bool); ok && verified {
 		if mailAddress, ok := v3["email"].(string); ok {
