@@ -9,6 +9,8 @@ github.com/MrMelon54/exit-reload v0.0.1 h1:sxHa59tNEQMcikwuX2+93lw6Vi1+R7oCRF8a0
 github.com/MrMelon54/exit-reload v0.0.1/go.mod h1:PLiSfmUzwdpTTQP3BBfUPhkqPwaIZjx0DuXBnM76Bug=
 github.com/MrMelon54/mjwt v0.1.1 h1:m+aTpxbhQCrOPKHN170DQMFR5r938LkviU38unob5Jw=
 github.com/MrMelon54/mjwt v0.1.1/go.mod h1:oYrDBWK09Hju98xb+bRQ0wy+RuAzacxYvKYOZchR2Tk=
+github.com/MrMelon54/mjwt v0.1.2 h1:uYjEWybACH/Kt1lFyfqFaU1QX/Kh1Gn72jtxoxaG1F0=
+github.com/MrMelon54/mjwt v0.1.2/go.mod h1:oYrDBWK09Hju98xb+bRQ0wy+RuAzacxYvKYOZchR2Tk=
 github.com/MrMelon54/rescheduler v0.0.2 h1:efrRwr0BYlkaXFucZDjQqRyIawZiMEAnzjea46Bs9Oc=
 github.com/MrMelon54/rescheduler v0.0.2/go.mod h1:OQDFtZHdS4/qA/r7rtJUQA22/hbpnZ9MGQCXOPjhC6w=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=

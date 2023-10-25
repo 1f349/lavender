@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"flag"
 	"github.com/1f349/lavender/server"
 	"github.com/1f349/lavender/server/pages"
@@ -70,6 +72,10 @@ func normalLoad(startUp server.Conf, wd string) {
 	mSign, err := mjwt.NewMJwtSignerFromFileOrCreate(startUp.Issuer, filepath.Join(wd, "lavender.private.key"), rand.Reader, 4096)
 	if err != nil {
 		log.Fatal("[Lavender] Failed to load or create MJWT signer:", err)
+	}
+	err = os.WriteFile("lavender.public.key", x509.MarshalPKCS1PublicKey(mSign.PublicKey()), 0600)
+	if err != nil && !errors.Is(err, os.ErrExist) {
+		log.Fatal("[Lavender] Failed to save MJWT public key:", err)
 	}
 
 	if err := pages.LoadPages(wd); err != nil {

@@ -7,7 +7,7 @@ require (
 	github.com/1f349/overlapfs v0.0.1
 	github.com/1f349/violet v0.0.10
 	github.com/MrMelon54/exit-reload v0.0.1
-	github.com/MrMelon54/mjwt v0.1.1
+	github.com/MrMelon54/mjwt v0.1.2
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/subcommands v1.2.0
 	github.com/google/uuid v1.3.1
