@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"github.com/1f349/lavender/server"
@@ -73,10 +75,7 @@ func normalLoad(startUp server.Conf, wd string) {
 	if err != nil {
 		log.Fatal("[Lavender] Failed to load or create MJWT signer:", err)
 	}
-	err = os.WriteFile("lavender.public.key", x509.MarshalPKCS1PublicKey(mSign.PublicKey()), 0600)
-	if err != nil && !errors.Is(err, os.ErrExist) {
-		log.Fatal("[Lavender] Failed to save MJWT public key:", err)
-	}
+	saveMjwtPubKey(mSign)
 
 	if err := pages.LoadPages(wd); err != nil {
 		log.Fatal("[Lavender] Failed to load page templates:", err)
@@ -90,4 +89,17 @@ func normalLoad(startUp server.Conf, wd string) {
 		// stop http server
 		_ = srv.Close()
 	})
+}
+
+func saveMjwtPubKey(mSign mjwt.Signer) {
+	pubKey := x509.MarshalPKCS1PublicKey(mSign.PublicKey())
+	b := new(bytes.Buffer)
+	err := pem.Encode(b, &pem.Block{Type: "RSA PUBLIC KEY", Bytes: pubKey})
+	if err != nil {
+		log.Fatal("[Lavender] Failed to encode MJWT public key:", err)
+	}
+	err = os.WriteFile("lavender.public.key", b.Bytes(), 0600)
+	if err != nil && !errors.Is(err, os.ErrExist) {
+		log.Fatal("[Lavender] Failed to save MJWT public key:", err)
+	}
 }
