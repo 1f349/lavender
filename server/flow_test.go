@@ -29,6 +29,8 @@ const lavenderDomain = "http://localhost:0"
 const clientAppDomain = "http://localhost:1"
 const loginDomain = "http://localhost:2"
 
+var clientAppMeta AllowedClient
+
 var testSigner mjwt.Signer
 
 var testOidc = &issuer.WellKnownOIDC{
@@ -70,7 +72,7 @@ var testHttpServer = HttpServer{
 	},
 	manager:   testManager,
 	flowState: cache.New[string, flowStateData](),
-	services: map[string]struct{}{
+	services: map[string]AllowedClient{
 		clientAppDomain: {},
 	},
 }
@@ -88,6 +90,16 @@ func init() {
 
 	testSigner = mjwt.NewMJwtSigner("https://example.com", key)
 	testHttpServer.signer = testSigner
+
+	parse, err := url.Parse(clientAppDomain)
+	if err != nil {
+		panic(err)
+	}
+
+	clientAppMeta = AllowedClient{
+		Url:         utils.JsonUrl{URL: parse},
+		Permissions: []string{"test-perm"},
+	}
 }
 
 func TestFlowPopup(t *testing.T) {
@@ -168,8 +180,8 @@ func TestFlowCallback(t *testing.T) {
 	expiryTime := time.Now().Add(15 * time.Minute)
 	nextState := uuid.NewString()
 	testHttpServer.flowState.Set("example.com:"+nextState, flowStateData{
-		sso:          testOidc,
-		targetOrigin: clientAppDomain,
+		sso:    testOidc,
+		target: clientAppMeta,
 	}, expiryTime)
 
 	testOa2Exchange = func(oa2conf oauth2.Config, ctx context.Context, code string) (*oauth2.Token, error) {

@@ -51,7 +51,8 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 	loginUn := loginName[:n]
 
 	targetOrigin := req.PostFormValue("origin")
-	if _, found := h.services[targetOrigin]; !found {
+	allowedService, found := h.services[targetOrigin]
+	if !found {
 		http.Error(rw, "Invalid target origin", http.StatusBadRequest)
 		return
 	}
@@ -60,7 +61,7 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 	state := login.Config.Namespace + ":" + uuidNewStringState()
 	h.flowState.Set(state, flowStateData{
 		login,
-		targetOrigin,
+		allowedService,
 	}, time.Now().Add(15*time.Minute))
 
 	// generate oauth2 config and redirect to authorize URL
@@ -128,26 +129,36 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 		return
 	}
 
+	var needsMailFlag bool
+
 	ps := claims.NewPermStorage()
-	for _, i := range h.conf.Permissions {
-		ps.Set(i)
+	for _, i := range v.target.Permissions {
+		if strings.HasPrefix(i, "dynamic:") {
+			if i == "dynamic:mail-client" {
+				needsMailFlag = true
+			}
+		} else {
+			ps.Set(i)
+		}
 	}
 
-	if verified, ok := v3["email_verified"].(bool); ok && verified {
-		if mailAddress, ok := v3["email"].(string); ok {
-			address, err := mail.ParseAddress(mailAddress)
-			if err != nil {
-				http.Error(rw, "Invalid email in userinfo", http.StatusInternalServerError)
-				return
+	if needsMailFlag {
+		if verified, ok := v3["email_verified"].(bool); ok && verified {
+			if mailAddress, ok := v3["email"].(string); ok {
+				address, err := mail.ParseAddress(mailAddress)
+				if err != nil {
+					http.Error(rw, "Invalid email in userinfo", http.StatusInternalServerError)
+					return
+				}
+				n := strings.IndexByte(address.Address, '@')
+				if n == -1 {
+					goto noEmailSupport
+				}
+				if address.Address[n+1:] != v.sso.Config.Namespace {
+					goto noEmailSupport
+				}
+				ps.Set("mail-client")
 			}
-			n := strings.IndexByte(address.Address, '@')
-			if n == -1 {
-				goto noEmailSupport
-			}
-			if address.Address[n+1:] != v.sso.Config.Namespace {
-				goto noEmailSupport
-			}
-			ps.Set("mail-client")
 		}
 	}
 
@@ -170,7 +181,7 @@ noEmailSupport:
 
 	pages.RenderPageTemplate(rw, "flow-callback", map[string]any{
 		"ServiceName":   h.conf.ServiceName,
-		"TargetOrigin":  v.targetOrigin,
+		"TargetOrigin":  v.target.Url.String(),
 		"TargetMessage": v3,
 		"AccessToken":   accessToken,
 		"RefreshToken":  refreshToken,

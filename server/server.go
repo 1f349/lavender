@@ -17,12 +17,12 @@ type HttpServer struct {
 	manager   *issuer.Manager
 	signer    mjwt.Signer
 	flowState *cache.Cache[string, flowStateData]
-	services  map[string]struct{}
+	services  map[string]AllowedClient
 }
 
 type flowStateData struct {
-	sso          *issuer.WellKnownOIDC
-	targetOrigin string
+	sso    *issuer.WellKnownOIDC
+	target AllowedClient
 }
 
 func NewHttpServer(conf Conf, signer mjwt.Signer) *http.Server {
@@ -41,9 +41,9 @@ func NewHttpServer(conf Conf, signer mjwt.Signer) *http.Server {
 		log.Fatal("[Lavender] Failed to create SSO service manager: ", err)
 	}
 
-	services := make(map[string]struct{})
+	services := make(map[string]AllowedClient)
 	for _, i := range conf.AllowedClients {
-		services[i.String()] = struct{}{}
+		services[i.Url.String()] = i
 	}
 
 	hs := &HttpServer{
