@@ -129,13 +129,16 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 		return
 	}
 
-	var needsMailFlag bool
+	var needsMailFlag, needsDomains bool
 
 	ps := claims.NewPermStorage()
 	for _, i := range v.target.Permissions {
 		if strings.HasPrefix(i, "dynamic:") {
-			if i == "dynamic:mail-client" {
+			switch i {
+			case "dynamic:mail-client":
 				needsMailFlag = true
+			case "dynamic:domain-owns":
+				needsDomains = true
 			}
 		} else {
 			ps.Set(i)
@@ -159,6 +162,13 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 				}
 				ps.Set("mail-client")
 			}
+		}
+	}
+
+	if needsDomains {
+		a := h.conf.Ownership.AllOwns(sub + "@" + v.sso.Config.Namespace)
+		for _, i := range a {
+			ps.Set("domain:owns=" + i)
 		}
 	}
 
