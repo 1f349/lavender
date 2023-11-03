@@ -11,7 +11,7 @@ import (
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/server/pages"
 	"github.com/1f349/lavender/utils"
-	"github.com/MrMelon54/mjwt"
+	"github.com/1f349/mjwt"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"github.com/stretchr/testify/assert"

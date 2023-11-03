@@ -13,7 +13,7 @@ import (
 	"github.com/1f349/lavender/server/pages"
 	"github.com/1f349/violet/utils"
 	exit_reload "github.com/MrMelon54/exit-reload"
-	"github.com/MrMelon54/mjwt"
+	"github.com/1f349/mjwt"
 	"github.com/google/subcommands"
 	"log"
 	"os"

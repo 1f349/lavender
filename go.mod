@@ -4,10 +4,10 @@ go 1.21.1
 
 require (
 	github.com/1f349/cache v0.0.2
+	github.com/1f349/mjwt v0.2.0
 	github.com/1f349/overlapfs v0.0.1
 	github.com/1f349/violet v0.0.10
 	github.com/MrMelon54/exit-reload v0.0.1
-	github.com/MrMelon54/mjwt v0.1.2
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/subcommands v1.2.0
 	github.com/google/uuid v1.3.1
@@ -18,6 +18,7 @@ require (
 
 require (
 	github.com/MrMelon54/rescheduler v0.0.2 // indirect
+	github.com/becheran/wildmatch-go v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/kr/text v0.2.0 // indirect

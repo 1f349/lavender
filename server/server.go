@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/1f349/cache"
 	"github.com/1f349/lavender/issuer"
-	"github.com/MrMelon54/mjwt"
+	"github.com/1f349/mjwt"
 	"github.com/julienschmidt/httprouter"
 	"log"
 	"net/http"

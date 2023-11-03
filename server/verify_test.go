@@ -3,9 +3,9 @@ package server
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"github.com/MrMelon54/mjwt"
-	"github.com/MrMelon54/mjwt/auth"
-	"github.com/MrMelon54/mjwt/claims"
+	"github.com/1f349/mjwt"
+	"github.com/1f349/mjwt/auth"
+	"github.com/1f349/mjwt/claims"
 	"github.com/julienschmidt/httprouter"
 	"github.com/stretchr/testify/assert"
 	"net/http"
