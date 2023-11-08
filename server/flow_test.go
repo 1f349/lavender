@@ -360,6 +360,9 @@ func TestFlowCallback(t *testing.T) {
         };
         window.addEventListener("load", function () {
             window.opener.postMessage(loginData, loginData.target);
+            setTimeout(function () {
+                window.close();
+            }, 500);
         });
     </script>
 </head>
