@@ -10,9 +10,9 @@
             if (isObject(event.data)) {
                 document.getElementById("someTextArea").textContent = JSON.stringify(event.data, null, 2);
                 let perms = document.getElementById("somePerms");
-                perms.childNodes.forEach(function (x) {
-                    x.clear();
-                });
+                while (perms.childNodes.length > 0) {
+                    perms.childNodes.item(0).remove();
+                }
                 let jwt = parseJwt(event.data.tokens.access);
                 if (jwt.per != null) {
                     jwt.per.forEach(function (x) {

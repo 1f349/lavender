@@ -15,6 +15,7 @@ import (
 	"golang.org/x/oauth2"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -33,6 +34,15 @@ var testOa2UserInfo = func(oidc *issuer.WellKnownOIDC, ctx context.Context, exch
 }
 
 func (h *HttpServer) flowPopup(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	cookie, err := req.Cookie("lavender-login-name")
+	if err == nil && cookie.Valid() == nil {
+		pages.RenderPageTemplate(rw, "flow-popup-memory", map[string]any{
+			"ServiceName": h.conf.ServiceName,
+			"Origin":      req.URL.Query().Get("origin"),
+			"LoginName":   cookie.Value,
+		})
+		return
+	}
 	pages.RenderPageTemplate(rw, "flow-popup", map[string]any{
 		"ServiceName": h.conf.ServiceName,
 		"Origin":      req.URL.Query().Get("origin"),
@@ -40,6 +50,23 @@ func (h *HttpServer) flowPopup(rw http.ResponseWriter, req *http.Request, _ http
 }
 
 func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if req.PostFormValue("not-you") == "1" {
+		http.SetCookie(rw, &http.Cookie{
+			Name:     "lavender-login-name",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+		})
+		http.Redirect(rw, req, (&url.URL{
+			Path: "/popup",
+			RawQuery: url.Values{
+				"origin": []string{req.PostFormValue("origin")},
+			}.Encode(),
+		}).String(), http.StatusFound)
+		return
+	}
 	loginName := req.PostFormValue("loginname")
 	login := h.manager.FindServiceFromLogin(loginName)
 	if login == nil {
@@ -49,6 +76,18 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 	// the @ must exist if the service is defined
 	n := strings.IndexByte(loginName, '@')
 	loginUn := loginName[:n]
+
+	now := time.Now()
+	future := now.AddDate(1, 0, 0)
+	http.SetCookie(rw, &http.Cookie{
+		Name:     "lavender-login-name",
+		Value:    loginName,
+		Path:     "/",
+		Expires:  future,
+		MaxAge:   int(future.Sub(now).Seconds()),
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
 
 	targetOrigin := req.PostFormValue("origin")
 	allowedService, found := h.services[targetOrigin]
