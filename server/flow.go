@@ -37,14 +37,14 @@ func (h *HttpServer) flowPopup(rw http.ResponseWriter, req *http.Request, _ http
 	cookie, err := req.Cookie("lavender-login-name")
 	if err == nil && cookie.Valid() == nil {
 		pages.RenderPageTemplate(rw, "flow-popup-memory", map[string]any{
-			"ServiceName": h.conf.ServiceName,
+			"ServiceName": h.conf.Load().ServiceName,
 			"Origin":      req.URL.Query().Get("origin"),
 			"LoginName":   cookie.Value,
 		})
 		return
 	}
 	pages.RenderPageTemplate(rw, "flow-popup", map[string]any{
-		"ServiceName": h.conf.ServiceName,
+		"ServiceName": h.conf.Load().ServiceName,
 		"Origin":      req.URL.Query().Get("origin"),
 	})
 }
@@ -68,7 +68,7 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 		return
 	}
 	loginName := req.PostFormValue("loginname")
-	login := h.manager.FindServiceFromLogin(loginName)
+	login := h.manager.Load().FindServiceFromLogin(loginName)
 	if login == nil {
 		http.Error(rw, "No login service defined for this username", http.StatusBadRequest)
 		return
@@ -90,7 +90,7 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 	})
 
 	targetOrigin := req.PostFormValue("origin")
-	allowedService, found := h.services[targetOrigin]
+	allowedService, found := (*h.services.Load())[targetOrigin]
 	if !found {
 		http.Error(rw, "Invalid target origin", http.StatusBadRequest)
 		return
@@ -105,7 +105,7 @@ func (h *HttpServer) flowPopupPost(rw http.ResponseWriter, req *http.Request, _ 
 
 	// generate oauth2 config and redirect to authorize URL
 	oa2conf := login.OAuth2Config
-	oa2conf.RedirectURL = h.conf.BaseUrl + "/callback"
+	oa2conf.RedirectURL = h.conf.Load().BaseUrl + "/callback"
 	nextUrl := oa2conf.AuthCodeURL(state, oauth2.SetAuthURLParam("login_name", loginUn))
 	http.Redirect(rw, req, nextUrl, http.StatusFound)
 }
@@ -120,7 +120,7 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 	q := req.URL.Query()
 	state := q.Get("state")
 	n := strings.IndexByte(state, ':')
-	if n == -1 || !h.manager.CheckNamespace(state[:n]) {
+	if n == -1 || !h.manager.Load().CheckNamespace(state[:n]) {
 		http.Error(rw, "Invalid state namespace", http.StatusBadRequest)
 		return
 	}
@@ -131,7 +131,7 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 	}
 
 	oa2conf := v.sso.OAuth2Config
-	oa2conf.RedirectURL = h.conf.BaseUrl + "/callback"
+	oa2conf.RedirectURL = h.conf.Load().BaseUrl + "/callback"
 	exchange, err := testOa2Exchange(oa2conf, context.Background(), q.Get("code"))
 	if err != nil {
 		fmt.Println("Failed exchange:", err)
@@ -193,25 +193,22 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 					return
 				}
 				n := strings.IndexByte(address.Address, '@')
-				if n == -1 {
-					goto noEmailSupport
+				if n != -1 {
+					if address.Address[n+1:] == v.sso.Config.Namespace {
+						ps.Set("mail:client")
+					}
 				}
-				if address.Address[n+1:] != v.sso.Config.Namespace {
-					goto noEmailSupport
-				}
-				ps.Set("mail-client")
 			}
 		}
 	}
 
 	if needsDomains {
-		a := h.conf.Ownership.AllOwns(sub + "@" + v.sso.Config.Namespace)
+		a := h.conf.Load().Users.AllDomains(sub + "@" + v.sso.Config.Namespace)
 		for _, i := range a {
 			ps.Set("domain:owns=" + i)
 		}
 	}
 
-noEmailSupport:
 	nsSub := sub + "@" + v.sso.Config.Namespace
 	ati := uuidNewStringAti()
 	accessToken, err := h.signer.GenerateJwt(nsSub, ati, jwt.ClaimStrings{aud}, 15*time.Minute, auth.AccessTokenClaims{
@@ -229,7 +226,7 @@ noEmailSupport:
 	}
 
 	pages.RenderPageTemplate(rw, "flow-callback", map[string]any{
-		"ServiceName":   h.conf.ServiceName,
+		"ServiceName":   h.conf.Load().ServiceName,
 		"TargetOrigin":  v.target.Url.String(),
 		"TargetMessage": v3,
 		"AccessToken":   accessToken,

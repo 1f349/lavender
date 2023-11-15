@@ -44,20 +44,14 @@ func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{})
 		return subcommands.ExitUsageError
 	}
 
-	openConf, err := os.Open(s.configPath)
+	var conf server.Conf
+	err := loadConfig(s.configPath, &conf)
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Println("[Lavender] Error: missing config file")
 		} else {
-			log.Println("[Lavender] Error: open config file: ", err)
+			log.Println("[Lavender] Error: loading config file: ", err)
 		}
-		return subcommands.ExitFailure
-	}
-
-	var config server.Conf
-	err = json.NewDecoder(openConf).Decode(&config)
-	if err != nil {
-		log.Println("[Lavender] Error: invalid config file: ", err)
 		return subcommands.ExitFailure
 	}
 
@@ -66,12 +60,8 @@ func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{})
 		log.Fatal("[Lavender] Failed to get absolute config path")
 	}
 	wd := filepath.Dir(configPathAbs)
-	normalLoad(config, wd)
-	return subcommands.ExitSuccess
-}
 
-func normalLoad(startUp server.Conf, wd string) {
-	mSign, err := mjwt.NewMJwtSignerFromFileOrCreate(startUp.Issuer, filepath.Join(wd, "lavender.private.key"), rand.Reader, 4096)
+	mSign, err := mjwt.NewMJwtSignerFromFileOrCreate(conf.Issuer, filepath.Join(wd, "lavender.private.key"), rand.Reader, 4096)
 	if err != nil {
 		log.Fatal("[Lavender] Failed to load or create MJWT signer:", err)
 	}
@@ -81,14 +71,35 @@ func normalLoad(startUp server.Conf, wd string) {
 		log.Fatal("[Lavender] Failed to load page templates:", err)
 	}
 
-	srv := server.NewHttpServer(startUp, mSign)
-	log.Printf("[Lavender] Starting HTTP server on '%s'\n", srv.Addr)
-	go utils.RunBackgroundHttp("HTTP", srv)
+	srv := server.NewHttpServer(conf, mSign)
+	log.Printf("[Lavender] Starting HTTP server on '%s'\n", srv.Server.Addr)
+	go utils.RunBackgroundHttp("HTTP", srv.Server)
 
-	exit_reload.ExitReload("Tulip", func() {}, func() {
+	exit_reload.ExitReload("Lavender", func() {
+		var conf server.Conf
+		err := loadConfig(s.configPath, &conf)
+		if err != nil {
+			log.Println("[Lavender] Failed to read config:", err)
+		}
+		err = srv.UpdateConfig(conf)
+		if err != nil {
+			log.Println("[Lavender] Failed to reload config:", err)
+		}
+	}, func() {
 		// stop http server
-		_ = srv.Close()
+		_ = srv.Server.Close()
 	})
+
+	return subcommands.ExitSuccess
+}
+
+func loadConfig(configPath string, conf *server.Conf) error {
+	openConf, err := os.Open(configPath)
+	if err != nil {
+		return err
+	}
+
+	return json.NewDecoder(openConf).Decode(conf)
 }
 
 func saveMjwtPubKey(mSign mjwt.Signer, wd string) {

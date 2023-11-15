@@ -1,9 +1,9 @@
 package server
 
 import (
-	"github.com/1f349/violet/utils"
 	"github.com/1f349/mjwt"
 	"github.com/1f349/mjwt/auth"
+	"github.com/1f349/violet/utils"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 )
@@ -24,7 +24,7 @@ func (h *HttpServer) verifyHandler(rw http.ResponseWriter, req *http.Request, _ 
 	}
 
 	// check issuer against config
-	if b.Issuer != h.conf.Issuer {
+	if b.Issuer != h.conf.Load().Issuer {
 		http.Error(rw, "Invalid issuer", http.StatusBadRequest)
 		return
 	}

@@ -8,16 +8,18 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"log"
 	"net/http"
+	"sync/atomic"
 	"time"
 )
 
 type HttpServer struct {
+	Server    *http.Server
 	r         *httprouter.Router
-	conf      Conf
-	manager   *issuer.Manager
+	conf      atomic.Pointer[Conf]
+	manager   atomic.Pointer[issuer.Manager]
 	signer    mjwt.Signer
 	flowState *cache.Cache[string, flowStateData]
-	services  map[string]AllowedClient
+	services  atomic.Pointer[map[string]AllowedClient]
 }
 
 type flowStateData struct {
@@ -25,7 +27,7 @@ type flowStateData struct {
 	target AllowedClient
 }
 
-func NewHttpServer(conf Conf, signer mjwt.Signer) *http.Server {
+func NewHttpServer(conf Conf, signer mjwt.Signer) *HttpServer {
 	r := httprouter.New()
 
 	// remove last slash from baseUrl
@@ -36,23 +38,24 @@ func NewHttpServer(conf Conf, signer mjwt.Signer) *http.Server {
 		}
 	}
 
-	manager, err := issuer.NewManager(conf.SsoServices)
-	if err != nil {
-		log.Fatal("[Lavender] Failed to create SSO service manager: ", err)
-	}
-
-	services := make(map[string]AllowedClient)
-	for _, i := range conf.AllowedClients {
-		services[i.Url.String()] = i
-	}
-
 	hs := &HttpServer{
+		Server: &http.Server{
+			Addr:              conf.Listen,
+			Handler:           r,
+			ReadTimeout:       time.Minute,
+			ReadHeaderTimeout: time.Minute,
+			WriteTimeout:      time.Minute,
+			IdleTimeout:       time.Minute,
+			MaxHeaderBytes:    2500,
+		},
 		r:         r,
-		conf:      conf,
-		manager:   manager,
 		signer:    signer,
 		flowState: cache.New[string, flowStateData](),
-		services:  services,
+	}
+	err := hs.UpdateConfig(conf)
+	if err != nil {
+		log.Fatalln("Failed to load initial config:", err)
+		return nil
 	}
 
 	r.GET("/", func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -63,14 +66,22 @@ func NewHttpServer(conf Conf, signer mjwt.Signer) *http.Server {
 	r.GET("/popup", hs.flowPopup)
 	r.POST("/popup", hs.flowPopupPost)
 	r.GET("/callback", hs.flowCallback)
+	return hs
+}
 
-	return &http.Server{
-		Addr:              conf.Listen,
-		Handler:           r,
-		ReadTimeout:       time.Minute,
-		ReadHeaderTimeout: time.Minute,
-		WriteTimeout:      time.Minute,
-		IdleTimeout:       time.Minute,
-		MaxHeaderBytes:    2500,
+func (h *HttpServer) UpdateConfig(conf Conf) error {
+	m, err := issuer.NewManager(conf.SsoServices)
+	if err != nil {
+		return fmt.Errorf("failed to reload SSO service manager: %w", err)
 	}
+
+	clientLookup := make(map[string]AllowedClient)
+	for _, i := range conf.AllowedClients {
+		clientLookup[i.Url.String()] = i
+	}
+
+	h.conf.Store(&conf)
+	h.manager.Store(m)
+	h.services.Store(&clientLookup)
+	return nil
 }

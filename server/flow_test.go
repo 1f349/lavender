@@ -65,19 +65,20 @@ var testOidc = &issuer.WellKnownOIDC{
 
 var testManager = issuer.NewManagerForTests([]*issuer.WellKnownOIDC{testOidc})
 var testHttpServer = HttpServer{
-	r: nil,
-	conf: Conf{
-		BaseUrl:     lavenderDomain,
-		ServiceName: "Test Lavender Service",
-	},
-	manager:   testManager,
+	r:         nil,
 	flowState: cache.New[string, flowStateData](),
-	services: map[string]AllowedClient{
-		clientAppDomain: {},
-	},
 }
 
 func init() {
+	testHttpServer.conf.Store(&Conf{
+		BaseUrl:     lavenderDomain,
+		ServiceName: "Test Lavender Service",
+	})
+	testHttpServer.manager.Store(testManager)
+	testHttpServer.services.Store(&map[string]AllowedClient{
+		clientAppDomain: {},
+	})
+
 	err := pages.LoadPages("")
 	if err != nil {
 		panic(err)
@@ -103,7 +104,8 @@ func init() {
 }
 
 func TestFlowPopup(t *testing.T) {
-	h := HttpServer{conf: Conf{ServiceName: "Test Service Name"}}
+	h := HttpServer{}
+	h.conf.Store(&Conf{ServiceName: "Test Service Name"})
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/popup?"+url.Values{"origin": []string{clientAppDomain}}.Encode(), nil)
 	h.flowPopup(rec, req, httprouter.Params{})

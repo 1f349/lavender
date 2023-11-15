@@ -12,7 +12,7 @@ type Conf struct {
 	Issuer         string             `json:"issuer"`
 	SsoServices    []issuer.SsoConfig `json:"sso_services"`
 	AllowedClients []AllowedClient    `json:"allowed_clients"`
-	Ownership      DomainOwnership    `json:"ownership"`
+	Users          UserConfig         `json:"users"`
 }
 
 type AllowedClient struct {

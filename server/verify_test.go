@@ -20,9 +20,9 @@ func TestVerifyHandler(t *testing.T) {
 
 	invalidSigner := mjwt.NewMJwtSigner("Invalid Issuer", privKey)
 	h := HttpServer{
-		conf:   Conf{Issuer: "Test Issuer"},
 		signer: mjwt.NewMJwtSigner("Test Issuer", privKey),
 	}
+	h.conf.Store(&Conf{Issuer: "Test Issuer"})
 
 	// test for missing bearer response
 	rec := httptest.NewRecorder()
