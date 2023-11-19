@@ -174,7 +174,7 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 	for _, i := range v.target.Permissions {
 		if strings.HasPrefix(i, "dynamic:") {
 			switch i {
-			case "dynamic:mail-client":
+			case "dynamic:mail-inbox":
 				needsMailFlag = true
 			case "dynamic:domain-owns":
 				needsDomains = true
