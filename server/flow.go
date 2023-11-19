@@ -195,7 +195,7 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 				n := strings.IndexByte(address.Address, '@')
 				if n != -1 {
 					if address.Address[n+1:] == v.sso.Config.Namespace {
-						ps.Set("mail:client")
+						ps.Set("mail:inbox=" + address.Address)
 					}
 				}
 			}
