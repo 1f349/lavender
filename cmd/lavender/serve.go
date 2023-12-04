@@ -13,7 +13,7 @@ import (
 	"github.com/1f349/lavender/server/pages"
 	"github.com/1f349/mjwt"
 	"github.com/1f349/violet/utils"
-	exit_reload "github.com/MrMelon54/exit-reload"
+	exitReload "github.com/MrMelon54/exit-reload"
 	"github.com/google/subcommands"
 	"log"
 	"os"
@@ -75,7 +75,7 @@ func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{})
 	log.Printf("[Lavender] Starting HTTP server on '%s'\n", srv.Server.Addr)
 	go utils.RunBackgroundHttp("HTTP", srv.Server)
 
-	exit_reload.ExitReload("Lavender", func() {
+	exitReload.ExitReload("Lavender", func() {
 		var conf server.Conf
 		err := loadConfig(s.configPath, &conf)
 		if err != nil {
