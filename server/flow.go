@@ -3,18 +3,13 @@ package server
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/server/pages"
-	"github.com/1f349/mjwt/auth"
-	"github.com/1f349/mjwt/claims"
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/oauth2"
 	"net/http"
-	"net/mail"
 	"net/url"
 	"strings"
 	"time"
@@ -138,98 +133,14 @@ func (h *HttpServer) flowCallback(rw http.ResponseWriter, req *http.Request, _ h
 		http.Error(rw, "Failed to exchange code", http.StatusInternalServerError)
 		return
 	}
-	v2, err := testOa2UserInfo(v.sso, req.Context(), exchange)
-	if err != nil {
-		fmt.Println("Failed to get userinfo:", err)
-		http.Error(rw, "Failed to get userinfo", http.StatusInternalServerError)
-		return
-	}
-	defer v2.Body.Close()
-	if v2.StatusCode != http.StatusOK {
-		http.Error(rw, "Failed to get userinfo: unexpected status code", http.StatusInternalServerError)
-		return
-	}
 
-	var v3 map[string]any
-	if err = json.NewDecoder(v2.Body).Decode(&v3); err != nil {
-		fmt.Println("Failed to decode userinfo:", err)
-		http.Error(rw, "Failed to decode userinfo", http.StatusInternalServerError)
-		return
-	}
-
-	sub, ok := v3["sub"].(string)
-	if !ok {
-		http.Error(rw, "Invalid subject in userinfo", http.StatusInternalServerError)
-		return
-	}
-	aud, ok := v3["aud"].(string)
-	if !ok {
-		http.Error(rw, "Invalid audience in userinfo", http.StatusInternalServerError)
-		return
-	}
-
-	var needsMailFlag, needsDomains bool
-
-	ps := claims.NewPermStorage()
-	for _, i := range v.target.Permissions {
-		if strings.HasPrefix(i, "dynamic:") {
-			switch i {
-			case "dynamic:mail-inbox":
-				needsMailFlag = true
-			case "dynamic:domain-owns":
-				needsDomains = true
-			}
-		} else {
-			ps.Set(i)
-		}
-	}
-
-	if needsMailFlag {
-		if verified, ok := v3["email_verified"].(bool); ok && verified {
-			if mailAddress, ok := v3["email"].(string); ok {
-				address, err := mail.ParseAddress(mailAddress)
-				if err != nil {
-					http.Error(rw, "Invalid email in userinfo", http.StatusInternalServerError)
-					return
-				}
-				n := strings.IndexByte(address.Address, '@')
-				if n != -1 {
-					if address.Address[n+1:] == v.sso.Config.Namespace {
-						ps.Set("mail:inbox=" + address.Address)
-					}
-				}
-			}
-		}
-	}
-
-	if needsDomains {
-		a := h.conf.Load().Users.AllDomains(sub + "@" + v.sso.Config.Namespace)
-		for _, i := range a {
-			ps.Set("domain:owns=" + i)
-		}
-	}
-
-	nsSub := sub + "@" + v.sso.Config.Namespace
-	ati := uuidNewStringAti()
-	accessToken, err := h.signer.GenerateJwt(nsSub, ati, jwt.ClaimStrings{aud}, 15*time.Minute, auth.AccessTokenClaims{
-		Perms: ps,
-	})
-	if err != nil {
-		http.Error(rw, "Error generating access token", http.StatusInternalServerError)
-		return
-	}
-
-	refreshToken, err := h.signer.GenerateJwt(nsSub, uuidNewStringRti(), jwt.ClaimStrings{aud}, 15*time.Minute, auth.RefreshTokenClaims{AccessTokenId: ati})
-	if err != nil {
-		http.Error(rw, "Error generating refresh token", http.StatusInternalServerError)
-		return
-	}
-
-	pages.RenderPageTemplate(rw, "flow-callback", map[string]any{
-		"ServiceName":   h.conf.Load().ServiceName,
-		"TargetOrigin":  v.target.Url.String(),
-		"TargetMessage": v3,
-		"AccessToken":   accessToken,
-		"RefreshToken":  refreshToken,
+	h.finishTokenGenerateFlow(rw, req, v, exchange, func(accessToken, refreshToken string, v3 map[string]any) {
+		pages.RenderPageTemplate(rw, "flow-callback", map[string]any{
+			"ServiceName":   h.conf.Load().ServiceName,
+			"TargetOrigin":  v.target.Url.String(),
+			"TargetMessage": v3,
+			"AccessToken":   accessToken,
+			"RefreshToken":  refreshToken,
+		})
 	})
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/mjwt"
 	"github.com/julienschmidt/httprouter"
+	"github.com/rs/cors"
 	"log"
 	"net/http"
 	"sync/atomic"
@@ -66,6 +67,25 @@ func NewHttpServer(conf Conf, signer mjwt.Signer) *HttpServer {
 	r.GET("/popup", hs.flowPopup)
 	r.POST("/popup", hs.flowPopupPost)
 	r.GET("/callback", hs.flowCallback)
+
+	var corsAccessControl = cors.New(cors.Options{
+		AllowOriginFunc: func(origin string) bool {
+			load := hs.services.Load()
+			_, ok := (*load)[origin]
+			return ok
+		},
+		AllowedMethods:   []string{http.MethodPost, http.MethodOptions},
+		AllowedHeaders:   []string{"Content-Type"},
+		AllowCredentials: true,
+	})
+	r.POST("/refresh", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		corsAccessControl.ServeHTTP(rw, req, func(writer http.ResponseWriter, request *http.Request) {
+			hs.refreshHandler(rw, req, params)
+		})
+	})
+	r.OPTIONS("/refresh", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		corsAccessControl.ServeHTTP(rw, req, func(_ http.ResponseWriter, _ *http.Request) {})
+	})
 	return hs
 }
 

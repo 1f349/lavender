@@ -4,15 +4,20 @@
     <title>Test Client</title>
     <script>
         let currentLoginPopup = null;
+        let currentTokens = null;
+        const ssoService = "http://localhost:9090";
 
         window.addEventListener("message", function (event) {
-            if (event.origin !== "http:\/\/localhost:9090") return;
+            if (event.origin !== ssoService) return;
             if (isObject(event.data)) {
                 document.getElementById("someTextArea").textContent = JSON.stringify(event.data, null, 2);
                 let perms = document.getElementById("somePerms");
                 while (perms.childNodes.length > 0) {
                     perms.childNodes.item(0).remove();
                 }
+                currentTokens = event.data.tokens;
+                document.getElementById("tokenValues").textContent = JSON.stringify(currentTokens, null, 2);
+
                 let jwt = parseJwt(event.data.tokens.access);
                 if (jwt.per != null) {
                     jwt.per.forEach(function (x) {
@@ -71,11 +76,32 @@
 
         function doThisThing() {
             if (currentLoginPopup) currentLoginPopup.close();
-            currentLoginPopup = popupCenterScreen('http://localhost:9090/popup?origin=' + encodeURIComponent("http://localhost:2020"), 'Login with Lavender', 500, 500, false);
+            currentLoginPopup = popupCenterScreen(ssoService + '/popup?origin=' + encodeURIComponent(location.origin), 'Login with Lavender', 500, 500, false);
+        }
+
+        async function refreshAllTokens() {
+            let req = await fetch(ssoService + '/refresh', {
+                method: 'POST',
+                mode: 'cors',
+                cache: 'no-cache',
+                credentials: 'include',
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({"token": currentTokens.refresh}),
+            });
+            let reqJson = await req.json();
+            currentTokens = reqJson;
+            document.getElementById("tokenValues").textContent = JSON.stringify(currentTokens, null, 2);
         }
     </script>
     <style>
         #someTextArea {
+            width: 400px;
+            height: 400px;
+        }
+
+        #tokenValues {
             width: 400px;
             height: 400px;
         }
@@ -88,10 +114,16 @@
 <main>
     <div>
         <button onclick="doThisThing();">Login</button>
+        <button onclick="refreshAllTokens();">Refresh</button>
     </div>
     <div style="display:flex; gap: 2em;">
         <div>
-            <label for="someTextArea"></label><textarea id="someTextArea"></textarea>
+            <div>
+                <label for="someTextArea"></label><textarea id="someTextArea"></textarea>
+            </div>
+            <div>
+                <label for="tokenValues"></label><textarea id="tokenValues"></textarea>
+            </div>
         </div>
         <div>
             <p>Permissions:</p>
