@@ -356,9 +356,9 @@ func TestFlowCallback(t *testing.T) {
     <script>
         let loginData = {
             target:"%s",
-            userinfo:{"aud":"%s","sub":"test-user","test-field":"ok"},
             tokens: `
 	const p2 = `,
+            userinfo:{"aud":"%s","sub":"test-user","test-field":"ok"},
         };
         window.addEventListener("load", function () {
             window.opener.postMessage(loginData, loginData.target);
@@ -376,7 +376,8 @@ func TestFlowCallback(t *testing.T) {
 </body>
 </html>
 `
-	var p1v = fmt.Sprintf(p1, clientAppDomain, clientAppDomain)
+	var p1v = fmt.Sprintf(p1, clientAppDomain)
+	var p2v = fmt.Sprintf(p2, clientAppDomain)
 
 	a := make([]byte, len(p1v))
 	n, err := rec.Body.Read(a)
@@ -394,7 +395,7 @@ func TestFlowCallback(t *testing.T) {
 	findByte(rec.Body, ',')
 	findByte(rec.Body, '}')
 
-	assert.Equal(t, p2, rec.Body.String())
+	assert.Equal(t, p2v, rec.Body.String())
 }
 
 func findByte(buf *bytes.Buffer, v byte) {
