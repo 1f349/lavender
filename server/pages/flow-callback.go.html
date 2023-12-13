@@ -5,11 +5,11 @@
     <script>
         let loginData = {
             target:{{.TargetOrigin}},
-            userinfo:{{.TargetMessage}},
             tokens: {
                 access:{{.AccessToken}},
                 refresh:{{.RefreshToken}},
             },
+            userinfo:{{.TargetMessage}},
         };
         window.addEventListener("load", function () {
             window.opener.postMessage(loginData, loginData.target);

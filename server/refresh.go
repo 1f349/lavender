@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-func (h *HttpServer) refreshHandler(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+func (h *HttpServer) refreshHandler(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	ref := strings.TrimSuffix(req.Referer(), "/")
 	allowedClient, ok := (*h.services.Load())[ref]
 	if !ok {
