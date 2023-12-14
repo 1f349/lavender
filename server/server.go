@@ -9,6 +9,7 @@ import (
 	"github.com/rs/cors"
 	"log"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -71,7 +72,7 @@ func NewHttpServer(conf Conf, signer mjwt.Signer) *HttpServer {
 	var corsAccessControl = cors.New(cors.Options{
 		AllowOriginFunc: func(origin string) bool {
 			load := hs.services.Load()
-			_, ok := (*load)[origin]
+			_, ok := (*load)[strings.TrimSuffix(origin, "/")]
 			return ok
 		},
 		AllowedMethods:   []string{http.MethodPost, http.MethodOptions},
