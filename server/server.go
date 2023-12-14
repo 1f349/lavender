@@ -63,11 +63,11 @@ func NewHttpServer(conf Conf, signer mjwt.Signer) *HttpServer {
 		rw.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintln(rw, "What is this?")
 	})
-	r.POST("/verify", hs.verifyHandler)
 	r.GET("/popup", hs.flowPopup)
 	r.POST("/popup", hs.flowPopupPost)
 	r.GET("/callback", hs.flowCallback)
 
+	// setup CORS options for `/verify` and `/refresh` endpoints
 	var corsAccessControl = cors.New(cors.Options{
 		AllowOriginFunc: func(origin string) bool {
 			load := hs.services.Load()
@@ -77,6 +77,13 @@ func NewHttpServer(conf Conf, signer mjwt.Signer) *HttpServer {
 		AllowedMethods:   []string{http.MethodPost, http.MethodOptions},
 		AllowedHeaders:   []string{"Content-Type"},
 		AllowCredentials: true,
+	})
+
+	// `/verify` and `/refresh` need CORS headers to be usable on other domains
+	r.POST("/verify", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		corsAccessControl.ServeHTTP(rw, req, func(writer http.ResponseWriter, request *http.Request) {
+			hs.verifyHandler(rw, req, params)
+		})
 	})
 	r.POST("/refresh", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		corsAccessControl.ServeHTTP(rw, req, func(writer http.ResponseWriter, request *http.Request) {
