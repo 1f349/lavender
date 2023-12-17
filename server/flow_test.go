@@ -114,6 +114,7 @@ func TestFlowPopup(t *testing.T) {
 <html lang="en">
 <head>
     <title>Test Service Name</title>
+    <link rel="stylesheet" href="/theme/style.css">
 </head>
 <body>
 <header>
@@ -353,6 +354,7 @@ func TestFlowCallback(t *testing.T) {
 <html lang="en">
 <head>
     <title>Test Lavender Service</title>
+    <link rel="stylesheet" href="/theme/style.css">
     <script>
         let loginData = {
             target:"%s",
