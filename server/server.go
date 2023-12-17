@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/1f349/cache"
 	"github.com/1f349/lavender/issuer"
+	"github.com/1f349/lavender/theme"
 	"github.com/1f349/mjwt"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/cors"
@@ -67,6 +69,10 @@ func NewHttpServer(conf Conf, signer mjwt.Signer) *HttpServer {
 	r.GET("/popup", hs.flowPopup)
 	r.POST("/popup", hs.flowPopupPost)
 	r.GET("/callback", hs.flowCallback)
+
+	r.GET("/theme/style.css", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		http.ServeContent(rw, req, "style.css", time.Now(), bytes.NewReader(theme.DefaultThemeCss))
+	})
 
 	// setup CORS options for `/verify` and `/refresh` endpoints
 	var corsAccessControl = cors.New(cors.Options{
