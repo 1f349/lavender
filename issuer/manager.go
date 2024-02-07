@@ -41,12 +41,16 @@ func NewManagerForTests(services []*WellKnownOIDC) *Manager {
 	return l
 }
 
-func (l *Manager) CheckNamespace(namespace string) bool {
-	_, ok := l.m[namespace]
+func (m *Manager) CheckNamespace(namespace string) bool {
+	_, ok := m.m[namespace]
 	return ok
 }
 
-func (l *Manager) FindServiceFromLogin(login string) *WellKnownOIDC {
+func (m *Manager) GetService(namespace string) *WellKnownOIDC {
+	return m.m[namespace]
+}
+
+func (m *Manager) FindServiceFromLogin(login string) *WellKnownOIDC {
 	// @ should have at least one byte before it
 	n := strings.IndexByte(login, '@')
 	if n < 1 {
@@ -57,5 +61,5 @@ func (l *Manager) FindServiceFromLogin(login string) *WellKnownOIDC {
 	if n2 != -1 {
 		return nil
 	}
-	return l.m[login[n+1:]]
+	return m.GetService(login[n+1:])
 }

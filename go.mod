@@ -8,11 +8,14 @@ require (
 	github.com/1f349/overlapfs v0.0.1
 	github.com/1f349/violet v0.0.13
 	github.com/MrMelon54/exit-reload v0.0.1
+	github.com/emersion/go-message v0.18.0
+	github.com/go-oauth2/oauth2/v4 v4.5.2
+	github.com/go-session/session v3.1.2+incompatible
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/subcommands v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/julienschmidt/httprouter v1.3.0
-	github.com/rs/cors v1.10.1
+	github.com/mattn/go-sqlite3 v1.14.18
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/oauth2 v0.16.0
 )
@@ -21,9 +24,20 @@ require (
 	github.com/MrMelon54/rescheduler v0.0.2 // indirect
 	github.com/becheran/wildmatch-go v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/emersion/go-textwrapper v0.0.0-20200911093747-65d896831594 // indirect
+	github.com/golang-jwt/jwt v3.2.1+incompatible // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/tidwall/btree v0.0.0-20191029221954-400434d76274 // indirect
+	github.com/tidwall/buntdb v1.1.2 // indirect
+	github.com/tidwall/gjson v1.12.1 // indirect
+	github.com/tidwall/grect v0.0.0-20161006141115-ba9a043346eb // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
+	github.com/tidwall/rtree v0.0.0-20180113144539-6cd427091e0e // indirect
+	github.com/tidwall/tinyqueue v0.0.0-20180302190814-1e39f5511563 // indirect
 	golang.org/x/net v0.20.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/protobuf v1.32.0 // indirect

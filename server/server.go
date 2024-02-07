@@ -2,36 +2,48 @@ package server
 
 import (
 	"bytes"
+	"crypto/subtle"
+	"encoding/json"
 	"fmt"
 	"github.com/1f349/cache"
+	clientStore "github.com/1f349/lavender/client-store"
+	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
+	"github.com/1f349/lavender/openid"
+	scope2 "github.com/1f349/lavender/scope"
 	"github.com/1f349/lavender/theme"
 	"github.com/1f349/mjwt"
+	"github.com/go-oauth2/oauth2/v4/errors"
+	"github.com/go-oauth2/oauth2/v4/generates"
+	"github.com/go-oauth2/oauth2/v4/manage"
+	"github.com/go-oauth2/oauth2/v4/server"
+	"github.com/go-oauth2/oauth2/v4/store"
 	"github.com/julienschmidt/httprouter"
-	"github.com/rs/cors"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
+var errInvalidScope = errors.New("missing required scope")
+
 type HttpServer struct {
-	Server    *http.Server
-	r         *httprouter.Router
-	conf      atomic.Pointer[Conf]
-	manager   atomic.Pointer[issuer.Manager]
-	signer    mjwt.Signer
-	flowState *cache.Cache[string, flowStateData]
-	services  atomic.Pointer[map[string]AllowedClient]
+	r          *httprouter.Router
+	oauthSrv   *server.Server
+	oauthMgr   *manage.Manager
+	db         *database.DB
+	conf       Conf
+	signingKey mjwt.Signer
+	manager    *issuer.Manager
+	flowState  *cache.Cache[string, flowStateData]
 }
 
 type flowStateData struct {
-	sso    *issuer.WellKnownOIDC
-	target AllowedClient
+	sso *issuer.WellKnownOIDC
 }
 
-func NewHttpServer(conf Conf, signer mjwt.Signer) *HttpServer {
+func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Server {
 	r := httprouter.New()
 
 	// remove last slash from baseUrl
@@ -42,80 +54,186 @@ func NewHttpServer(conf Conf, signer mjwt.Signer) *HttpServer {
 		}
 	}
 
-	hs := &HttpServer{
-		Server: &http.Server{
-			Addr:              conf.Listen,
-			Handler:           r,
-			ReadTimeout:       time.Minute,
-			ReadHeaderTimeout: time.Minute,
-			WriteTimeout:      time.Minute,
-			IdleTimeout:       time.Minute,
-			MaxHeaderBytes:    2500,
-		},
-		r:         r,
-		signer:    signer,
-		flowState: cache.New[string, flowStateData](),
-	}
-	err := hs.UpdateConfig(conf)
+	openIdConf := openid.GenConfig(conf.BaseUrl, []string{"openid", "name", "username", "profile", "email", "birthdate", "age", "zoneinfo", "locale"}, []string{"sub", "name", "preferred_username", "profile", "picture", "website", "email", "email_verified", "gender", "birthdate", "zoneinfo", "locale", "updated_at"})
+	openIdBytes, err := json.Marshal(openIdConf)
 	if err != nil {
-		log.Fatalln("Failed to load initial config:", err)
-		return nil
+		log.Fatalln("Failed to generate OpenID configuration:", err)
 	}
 
-	r.GET("/", func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-		rw.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprintln(rw, "What is this?")
-	})
-	r.GET("/popup", hs.flowPopup)
-	r.POST("/popup", hs.flowPopupPost)
-	r.GET("/callback", hs.flowCallback)
+	oauthManager := manage.NewDefaultManager()
+	oauthSrv := server.NewServer(server.NewConfig(), oauthManager)
+	hs := &HttpServer{
+		r:          httprouter.New(),
+		oauthSrv:   oauthSrv,
+		oauthMgr:   oauthManager,
+		db:         db,
+		conf:       conf,
+		signingKey: signingKey,
+		flowState:  cache.New[string, flowStateData](),
+	}
 
+	hs.manager, err = issuer.NewManager(conf.SsoServices)
+	if err != nil {
+		log.Fatal("Failed to reload SSO service manager: %w", err)
+	}
+
+	oauthManager.SetAuthorizeCodeTokenCfg(manage.DefaultAuthorizeCodeTokenCfg)
+	oauthManager.MustTokenStorage(store.NewMemoryTokenStore())
+	oauthManager.MapAccessGenerate(generates.NewAccessGenerate())
+	oauthManager.MapClientStorage(clientStore.New(db))
+
+	oauthSrv.SetResponseErrorHandler(func(re *errors.Response) {
+		log.Printf("Response error: %#v\n", re)
+	})
+	oauthSrv.SetClientInfoHandler(func(req *http.Request) (clientID, clientSecret string, err error) {
+		cId, cSecret, err := server.ClientBasicHandler(req)
+		if cId == "" && cSecret == "" {
+			cId, cSecret, err = server.ClientFormHandler(req)
+		}
+		if err != nil {
+			return "", "", err
+		}
+		return cId, cSecret, nil
+	})
+	oauthSrv.SetUserAuthorizationHandler(hs.oauthUserAuthorization)
+	oauthSrv.SetAuthorizeScopeHandler(func(rw http.ResponseWriter, req *http.Request) (scope string, err error) {
+		var form url.Values
+		if req.Method == http.MethodPost {
+			form = req.PostForm
+		} else {
+			form = req.URL.Query()
+		}
+		a := form.Get("scope")
+		if !scope2.ScopesExist(a) {
+			return "", errInvalidScope
+		}
+		return a, nil
+	})
+
+	r.GET("/.well-known/openid-configuration", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		rw.WriteHeader(http.StatusOK)
+		_, _ = rw.Write(openIdBytes)
+	})
+	r.GET("/", hs.OptionalAuthentication(hs.Home))
+
+	// login
+	r.GET("/login", hs.loginGet)
+	r.POST("/login", hs.loginPost)
+	r.POST("/logout", hs.RequireAuthentication(func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
+		lNonce, ok := auth.Session.Get("action-nonce")
+		if !ok {
+			http.Error(rw, "Missing nonce", http.StatusInternalServerError)
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(lNonce.(string)), []byte(req.PostFormValue("nonce"))) == 1 {
+			auth.Session.Delete("session-data")
+			if auth.Session.Save() != nil {
+				http.Error(rw, "Failed to save session", http.StatusInternalServerError)
+				return
+			}
+
+			http.SetCookie(rw, &http.Cookie{
+				Name:     "login-data",
+				Path:     "/",
+				MaxAge:   -1,
+				Secure:   true,
+				SameSite: http.SameSiteStrictMode,
+			})
+
+			http.Redirect(rw, req, "/", http.StatusFound)
+			return
+		}
+		http.Error(rw, "Logout failed", http.StatusInternalServerError)
+	}))
+
+	// theme styles
 	r.GET("/theme/style.css", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		http.ServeContent(rw, req, "style.css", time.Now(), bytes.NewReader(theme.DefaultThemeCss))
 	})
 
-	// setup CORS options for `/verify` and `/refresh` endpoints
-	var corsAccessControl = cors.New(cors.Options{
-		AllowOriginFunc: func(origin string) bool {
-			load := hs.services.Load()
-			_, ok := (*load)[strings.TrimSuffix(origin, "/")]
-			return ok
-		},
-		AllowedMethods:   []string{http.MethodPost, http.MethodOptions},
-		AllowedHeaders:   []string{"Content-Type"},
-		AllowCredentials: true,
+	// management pages
+	r.GET("/manage/apps", hs.RequireAdminAuthentication(hs.ManageAppsGet))
+	r.POST("/manage/apps", hs.RequireAdminAuthentication(hs.ManageAppsPost))
+	r.GET("/manage/users", hs.RequireAdminAuthentication(hs.ManageUsersGet))
+	r.POST("/manage/users", hs.RequireAdminAuthentication(hs.ManageUsersPost))
+
+	// oauth pages
+	r.GET("/authorize", hs.RequireAuthentication(hs.authorizeEndpoint))
+	r.POST("/authorize", hs.RequireAuthentication(hs.authorizeEndpoint))
+	r.POST("/token", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		if err := oauthSrv.HandleTokenRequest(rw, req); err != nil {
+			http.Error(rw, err.Error(), http.StatusInternalServerError)
+		}
+	})
+	r.GET("/userinfo", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		token, err := oauthSrv.ValidationBearerToken(req)
+		if err != nil {
+			http.Error(rw, "403 Forbidden", http.StatusForbidden)
+			return
+		}
+		userId := token.GetUserID()
+
+		fmt.Printf("Using token for user: %s by app: %s with scope: '%s'\n", userId, token.GetClientID(), token.GetScope())
+		claims := ParseClaims(token.GetScope())
+		if !claims["openid"] {
+			http.Error(rw, "Invalid scope", http.StatusBadRequest)
+			return
+		}
+
+		m := map[string]any{}
+		m["sub"] = userId
+		m["aud"] = token.GetClientID()
+		m["updated_at"] = time.Now().Unix()
+
+		_ = json.NewEncoder(rw).Encode(m)
 	})
 
-	// `/verify` and `/refresh` need CORS headers to be usable on other domains
-	r.POST("/verify", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		corsAccessControl.ServeHTTP(rw, req, func(writer http.ResponseWriter, request *http.Request) {
-			hs.verifyHandler(rw, req, params)
-		})
-	})
-	r.POST("/refresh", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		corsAccessControl.ServeHTTP(rw, req, func(writer http.ResponseWriter, request *http.Request) {
-			hs.refreshHandler(rw, req, params)
-		})
-	})
-	r.OPTIONS("/refresh", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		corsAccessControl.ServeHTTP(rw, req, func(_ http.ResponseWriter, _ *http.Request) {})
-	})
-	return hs
+	return &http.Server{
+		Addr:              conf.Listen,
+		Handler:           r,
+		ReadTimeout:       time.Minute,
+		ReadHeaderTimeout: time.Minute,
+		WriteTimeout:      time.Minute,
+		IdleTimeout:       time.Minute,
+		MaxHeaderBytes:    2500,
+	}
 }
 
-func (h *HttpServer) UpdateConfig(conf Conf) error {
-	m, err := issuer.NewManager(conf.SsoServices)
+func (h *HttpServer) SafeRedirect(rw http.ResponseWriter, req *http.Request) {
+	redirectUrl := req.FormValue("redirect")
+	if redirectUrl == "" {
+		http.Redirect(rw, req, "/", http.StatusFound)
+		return
+	}
+	parse, err := url.Parse(redirectUrl)
 	if err != nil {
-		return fmt.Errorf("failed to reload SSO service manager: %w", err)
+		http.Error(rw, "Failed to parse redirect url: "+redirectUrl, http.StatusBadRequest)
+		return
+	}
+	if parse.Scheme != "" && parse.Opaque != "" && parse.User != nil && parse.Host != "" {
+		http.Error(rw, "Invalid redirect url: "+redirectUrl, http.StatusBadRequest)
+		return
+	}
+	http.Redirect(rw, req, parse.String(), http.StatusFound)
+}
+
+func ParseClaims(claims string) map[string]bool {
+	m := make(map[string]bool)
+	for {
+		n := strings.IndexByte(claims, ' ')
+		if n == -1 {
+			if claims != "" {
+				m[claims] = true
+			}
+			break
+		}
+
+		a := claims[:n]
+		claims = claims[n+1:]
+		if a != "" {
+			m[a] = true
+		}
 	}
 
-	clientLookup := make(map[string]AllowedClient)
-	for _, i := range conf.AllowedClients {
-		clientLookup[i.Url.String()] = i
-	}
-
-	h.conf.Store(&conf)
-	h.manager.Store(m)
-	h.services.Store(&clientLookup)
-	return nil
+	return m
 }

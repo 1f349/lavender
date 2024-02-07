@@ -11,13 +11,13 @@
 <main>
     <div>Log in as: <span>{{.LoginName}}</span></div>
     <div>
-        <form method="POST" action="/popup">
+        <form method="POST" action="/login">
             <input type="hidden" name="origin" value="{{.Origin}}"/>
             <button type="submit" name="not-you" value="1">Not You?</button>
         </form>
     </div>
     <div>
-        <form method="POST" action="/popup">
+        <form method="POST" action="/login">
             <input type="hidden" name="origin" value="{{.Origin}}"/>
             <input type="hidden" name="loginname" value="{{.LoginName}}"/>
             <button type="submit">Continue</button>
