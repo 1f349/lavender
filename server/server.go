@@ -18,6 +18,7 @@ import (
 	"github.com/go-oauth2/oauth2/v4/manage"
 	"github.com/go-oauth2/oauth2/v4/server"
 	"github.com/go-oauth2/oauth2/v4/store"
+	"github.com/go-session/session"
 	"github.com/julienschmidt/httprouter"
 	"log"
 	"net/http"
@@ -44,6 +45,8 @@ type flowStateData struct {
 }
 
 func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Server {
+	session.InitManager(session.SetCookieName("lavender_session"))
+
 	r := httprouter.New()
 
 	// remove last slash from baseUrl
@@ -117,8 +120,9 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 	r.GET("/", hs.OptionalAuthentication(hs.Home))
 
 	// login
-	r.GET("/login", hs.loginGet)
-	r.POST("/login", hs.loginPost)
+	r.GET("/login", hs.OptionalAuthentication(hs.loginGet))
+	r.POST("/login", hs.OptionalAuthentication(hs.loginPost))
+	r.GET("/callback", hs.OptionalAuthentication(hs.loginCallback))
 	r.POST("/logout", hs.RequireAuthentication(func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
 		lNonce, ok := auth.Session.Get("action-nonce")
 		if !ok {

@@ -24,6 +24,7 @@ type UserAuth struct {
 type SessionData struct {
 	ID          string
 	DisplayName string
+	UserInfo    map[string]any
 }
 
 func (u UserAuth) IsGuest() bool {
