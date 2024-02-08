@@ -84,7 +84,7 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 		}) {
 			return
 		}
-		if HasRole(roles, "lavender:admin") {
+		if !HasRole(roles, "lavender:admin") {
 			http.Error(rw, "400 Bad Request: Only admin users can create SSO client applications", http.StatusBadRequest)
 			return
 		}

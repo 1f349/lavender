@@ -200,11 +200,11 @@ func (h *HttpServer) readLoginDataCookie(rw http.ResponseWriter, req *http.Reque
 
 	sessionData, done := h.fetchUserInfo(rw, err, sso, token)
 	if !done {
-		return false
+		return true
 	}
 
 	u.Data = sessionData
-	return true
+	return false
 }
 
 func (h *HttpServer) fetchUserInfo(rw http.ResponseWriter, err error, sso *issuer.WellKnownOIDC, token *oauth2.Token) (SessionData, bool) {

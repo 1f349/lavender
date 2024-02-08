@@ -33,7 +33,7 @@ func (h *HttpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _
 	}) {
 		return
 	}
-	if HasRole(roles, "lavender:admin") {
+	if !HasRole(roles, "lavender:admin") {
 		http.Error(rw, "403 Forbidden", http.StatusForbidden)
 		return
 	}
@@ -76,7 +76,7 @@ func (h *HttpServer) ManageUsersPost(rw http.ResponseWriter, req *http.Request, 
 	}) {
 		return
 	}
-	if HasRole(roles, "lavender:admin") {
+	if !HasRole(roles, "lavender:admin") {
 		http.Error(rw, "400 Bad Request: Only admin users can manage users", http.StatusBadRequest)
 		return
 	}
