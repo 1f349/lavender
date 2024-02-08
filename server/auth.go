@@ -1,10 +1,6 @@
 package server
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"github.com/1f349/lavender/database"
 	"github.com/go-session/session"
@@ -24,7 +20,7 @@ type UserAuth struct {
 type SessionData struct {
 	ID          string
 	DisplayName string
-	UserInfo    map[string]any
+	UserInfo    UserInfoFields
 }
 
 func (u UserAuth) IsGuest() bool {
@@ -45,7 +41,7 @@ func (h *HttpServer) RequireAdminAuthentication(next UserHandler) httprouter.Han
 		}) {
 			return
 		}
-		if HasRole(roles, "lavender:admin") {
+		if !HasRole(roles, "lavender:admin") {
 			http.Error(rw, "403 Forbidden", http.StatusForbidden)
 			return
 		}
@@ -71,14 +67,8 @@ func (h *HttpServer) OptionalAuthentication(next UserHandler) httprouter.Handle 
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if auth.IsGuest() {
-			if loginCookie, err := req.Cookie("login-data"); err == nil {
-				if decryptedBytes, err := base64.RawStdEncoding.DecodeString(loginCookie.Value); err == nil {
-					if decryptedData, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, h.signingKey.PrivateKey(), decryptedBytes, []byte("login-data")); err == nil {
-						auth.Data.ID = string(decryptedData)
-					}
-				}
-			}
+		if auth.IsGuest() && !h.readLoginDataCookie(rw, req, &auth) {
+			return
 		}
 		next(rw, req, params, auth)
 	}

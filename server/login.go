@@ -1,12 +1,17 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"github.com/1f349/lavender/database"
+	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/pages"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
@@ -106,61 +111,52 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 		return
 	}
 
-	res, err := flowState.sso.OAuth2Config.Client(context.Background(), token).Get(flowState.sso.UserInfoEndpoint)
-	if err != nil || res.StatusCode != 200 {
-		rw.WriteHeader(http.StatusInternalServerError)
-		if err != nil {
-			_, _ = rw.Write([]byte(err.Error()))
-		} else {
-			_, _ = rw.Write([]byte(res.Status))
+	sessionData, done := h.fetchUserInfo(rw, err, flowState.sso, token)
+	if !done {
+		return
+	}
+
+	if h.DbTx(rw, func(tx *database.Tx) error {
+		_, err := tx.GetUser(sessionData.ID)
+		if errors.Is(err, sql.ErrNoRows) {
+			uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
+			uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
+			return tx.InsertUser(sessionData.ID, uEmail, uEmailVerified, "", true)
 		}
+		return err
+	}) {
 		return
-	}
-	defer res.Body.Close()
-
-	var userInfoJson map[string]any
-	if err := json.NewDecoder(res.Body).Decode(&userInfoJson); err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	subject, ok := userInfoJson["sub"].(string)
-	if !ok {
-		http.Error(rw, "Invalid subject", http.StatusInternalServerError)
-		return
-	}
-	subject += "@" + flowState.sso.Config.Namespace
-
-	displayName, ok := userInfoJson["name"].(string)
-	if !ok {
-		displayName = "Unknown Name"
 	}
 
 	// only continues if the above tx succeeds
-	auth.Data = SessionData{
-		ID:          subject,
-		DisplayName: displayName,
-		UserInfo:    userInfoJson,
-	}
+	auth.Data = sessionData
 	if auth.SaveSessionData() != nil {
 		http.Error(rw, "Failed to save session", http.StatusInternalServerError)
 		return
 	}
 
-	if h.setLoginDataCookie(rw, auth.Data.ID) {
+	if h.setLoginDataCookie(rw, auth.Data.ID, token) {
 		http.Error(rw, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	h.SafeRedirect(rw, req)
 }
 
-func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, userId string) bool {
-	encryptedData, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, h.signingKey.PublicKey(), []byte(userId), []byte("login-data"))
+func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, userId string, token *oauth2.Token) bool {
+	buf := new(bytes.Buffer)
+	buf.WriteString(userId)
+	buf.WriteByte(0)
+	err := json.NewEncoder(buf).Encode(token)
+	if err != nil {
+		return true
+	}
+	encryptedData, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, h.signingKey.PublicKey(), buf.Bytes(), []byte("lavender-login-data"))
 	if err != nil {
 		return true
 	}
 	encryptedString := base64.RawStdEncoding.EncodeToString(encryptedData)
 	http.SetCookie(rw, &http.Cookie{
-		Name:     "login-data",
+		Name:     "lavender-login-data",
 		Value:    encryptedString,
 		Path:     "/",
 		Expires:  time.Now().AddDate(0, 3, 0),
@@ -168,4 +164,72 @@ func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, userId string) b
 		SameSite: http.SameSiteStrictMode,
 	})
 	return false
+}
+
+func (h *HttpServer) readLoginDataCookie(rw http.ResponseWriter, req *http.Request, u *UserAuth) bool {
+	loginCookie, err := req.Cookie("lavender-login-data")
+	if err != nil {
+		return false
+	}
+	decryptedBytes, err := base64.RawStdEncoding.DecodeString(loginCookie.Value)
+	if err != nil {
+		return false
+	}
+	decryptedData, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, h.signingKey.PrivateKey(), decryptedBytes, []byte("lavender-login-data"))
+	if err != nil {
+		return false
+	}
+
+	buf := bytes.NewBuffer(decryptedData)
+	userId, err := buf.ReadString(0)
+	if err != nil {
+		return false
+	}
+	userId = strings.TrimSuffix(userId, "\x00")
+
+	var token *oauth2.Token
+	err = json.NewDecoder(buf).Decode(&token)
+	if err != nil {
+		return false
+	}
+
+	sso := h.manager.FindServiceFromLogin(userId)
+	if sso == nil {
+		return false
+	}
+
+	sessionData, done := h.fetchUserInfo(rw, err, sso, token)
+	if !done {
+		return false
+	}
+
+	u.Data = sessionData
+	return true
+}
+
+func (h *HttpServer) fetchUserInfo(rw http.ResponseWriter, err error, sso *issuer.WellKnownOIDC, token *oauth2.Token) (SessionData, bool) {
+	res, err := sso.OAuth2Config.Client(context.Background(), token).Get(sso.UserInfoEndpoint)
+	if err != nil || res.StatusCode != http.StatusOK {
+		return SessionData{}, false
+	}
+	defer res.Body.Close()
+
+	var userInfoJson UserInfoFields
+	if err := json.NewDecoder(res.Body).Decode(&userInfoJson); err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return SessionData{}, false
+	}
+	subject, ok := userInfoJson.GetString("sub")
+	if !ok {
+		http.Error(rw, "Invalid subject", http.StatusInternalServerError)
+		return SessionData{}, false
+	}
+	subject += "@" + sso.Config.Namespace
+
+	displayName := userInfoJson.GetStringOrDefault("name", "Unknown Name")
+	return SessionData{
+		ID:          subject,
+		DisplayName: displayName,
+		UserInfo:    userInfoJson,
+	}, true
 }

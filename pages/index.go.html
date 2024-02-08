@@ -15,11 +15,13 @@
             <button type="submit">Manage Applications</button>
         </form>
     </div>
-    <div>
-        <form method="GET" action="/manage/users">
-            <button type="submit">Manage Users</button>
-        </form>
-    </div>
+    {{if .IsAdmin}}
+        <div>
+            <form method="GET" action="/manage/users">
+                <button type="submit">Manage Users</button>
+            </form>
+        </div>
+    {{end}}
     <div>
         <form method="POST" action="/logout">
             <input type="hidden" name="nonce" value="{{.Nonce}}">

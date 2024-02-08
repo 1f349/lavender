@@ -137,7 +137,7 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 			}
 
 			http.SetCookie(rw, &http.Cookie{
-				Name:     "login-data",
+				Name:     "lavender-login-data",
 				Path:     "/",
 				MaxAge:   -1,
 				Secure:   true,
@@ -156,8 +156,8 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 	})
 
 	// management pages
-	r.GET("/manage/apps", hs.RequireAdminAuthentication(hs.ManageAppsGet))
-	r.POST("/manage/apps", hs.RequireAdminAuthentication(hs.ManageAppsPost))
+	r.GET("/manage/apps", hs.RequireAuthentication(hs.ManageAppsGet))
+	r.POST("/manage/apps", hs.RequireAuthentication(hs.ManageAppsPost))
 	r.GET("/manage/users", hs.RequireAdminAuthentication(hs.ManageUsersGet))
 	r.POST("/manage/users", hs.RequireAdminAuthentication(hs.ManageUsersPost))
 

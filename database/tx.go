@@ -65,8 +65,8 @@ func (t *Tx) GetUserEmail(sub string) (string, error) {
 
 func (t *Tx) GetClientInfo(sub string) (oauth2.ClientInfo, error) {
 	var u ClientInfoDbOutput
-	row := t.tx.QueryRow(`SELECT secret, name, domain, sso, active FROM client_store WHERE subject = ? LIMIT 1`, sub)
-	err := row.Scan(&u.Secret, &u.Name, &u.Domain, &u.SSO, &u.Active)
+	row := t.tx.QueryRow(`SELECT secret, name, domain, public, sso, active FROM client_store WHERE subject = ? LIMIT 1`, sub)
+	err := row.Scan(&u.Secret, &u.Name, &u.Domain, &u.Public, &u.SSO, &u.Active)
 	u.Owner = sub
 	if !u.Active {
 		return nil, fmt.Errorf("client is not active")
@@ -74,16 +74,16 @@ func (t *Tx) GetClientInfo(sub string) (oauth2.ClientInfo, error) {
 	return &u, err
 }
 
-func (t *Tx) GetAppList(offset int) ([]ClientInfoDbOutput, error) {
+func (t *Tx) GetAppList(owner string, admin bool, offset int) ([]ClientInfoDbOutput, error) {
 	var u []ClientInfoDbOutput
-	row, err := t.tx.Query(`SELECT subject, name, domain, owner, sso, active FROM client_store LIMIT 25 OFFSET ?`, offset)
+	row, err := t.tx.Query(`SELECT subject, name, domain, owner, public, sso, active FROM client_store WHERE owner = ? OR ? = 1 LIMIT 25 OFFSET ?`, owner, admin, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer row.Close()
 	for row.Next() {
 		var a ClientInfoDbOutput
-		err := row.Scan(&a.Sub, &a.Name, &a.Domain, &a.Owner, &a.SSO, &a.Active)
+		err := row.Scan(&a.Sub, &a.Name, &a.Domain, &a.Owner, &a.Public, &a.SSO, &a.Active)
 		if err != nil {
 			return nil, err
 		}
@@ -92,18 +92,18 @@ func (t *Tx) GetAppList(offset int) ([]ClientInfoDbOutput, error) {
 	return u, row.Err()
 }
 
-func (t *Tx) InsertClientApp(name, domain string, sso, active bool, owner string) error {
+func (t *Tx) InsertClientApp(name, domain string, public, sso, active bool, owner string) error {
 	u := uuid.New()
 	secret, err := password.GenerateApiSecret(70)
 	if err != nil {
 		return err
 	}
-	_, err = t.tx.Exec(`INSERT INTO client_store (subject, name, secret, domain, owner, sso, active) VALUES (?, ?, ?, ?, ?, ?, ?)`, u.String(), name, secret, domain, owner, sso, active)
+	_, err = t.tx.Exec(`INSERT INTO client_store (subject, name, secret, domain, owner, public, sso, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, u.String(), name, secret, domain, owner, public, sso, active)
 	return err
 }
 
-func (t *Tx) UpdateClientApp(subject uuid.UUID, owner string, name, domain string, sso, active bool) error {
-	_, err := t.tx.Exec(`UPDATE client_store SET name = ?, domain = ?, sso = ?, active = ? WHERE subject = ? AND owner = ?`, name, domain, sso, active, subject.String(), owner)
+func (t *Tx) UpdateClientApp(subject uuid.UUID, owner string, name, domain string, public, sso, active bool) error {
+	_, err := t.tx.Exec(`UPDATE client_store SET name = ?, domain = ?, public = ?, sso = ?, active = ? WHERE subject = ? AND owner = ?`, name, domain, public, sso, active, subject.String(), owner)
 	return err
 }
 
