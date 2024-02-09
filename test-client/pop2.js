@@ -135,24 +135,40 @@
         clientRequest: function (resource, options, refresh = false) {
             const sendRequest = function () {
                 options.credentials = 'include';
-                if (options.headers) {
-                    options.headers['Authorization'] = 'Bearer ' + access_token;
-                }
-                return fetch(resource, options);
+                if (!options.headers) options.headers = {};
+                options.headers['Authorization'] = 'Bearer ' + access_token;
+                return new Promise(function (res, rej) {
+                    fetch(resource, options).then(function (x) {
+                        if (x.statusCode >= 200 && x.statusCode < 300) res(x);
+                        else rej(x);
+                    }).catch(function (x) {
+                        rej(x);
+                    });
+                });
             };
+            const resendRequest = function() {
+                return new Promise(function (res, rej) {
+                    w.POP2.getToken(function() {
+                        sendRequest().then(function (x) {
+                            res(x);
+                        }).catch(function (x) {
+                            rej(x);
+                        });
+                    });
+                });
+            };
+
             if (!refresh) return sendRequest();
             else {
                 return new Promise(function (res, rej) {
                     sendRequest().then(function (x) {
-                        res(x)
+                        res(x);
                     }).catch(function () {
-                        w.POP2.getToken(function () {
-                            sendRequest().then(function (x) {
-                                res(x);
-                            }).catch(function (x) {
-                                rej(x);
-                            });
-                        })
+                        resendRequest().then(function (x) {
+                            res(x);
+                        }).catch(function (x) {
+                            rej(x);
+                        });
                     });
                 });
             }
