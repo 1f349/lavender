@@ -67,8 +67,9 @@ func (h *HttpServer) OptionalAuthentication(next UserHandler) httprouter.Handle 
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if auth.IsGuest() && h.readLoginDataCookie(rw, req, &auth) {
-			return
+		if auth.IsGuest() {
+			// if this fails internally it just sees the user as logged out
+			h.readLoginDataCookie(rw, req, &auth)
 		}
 		next(rw, req, params, auth)
 	}

@@ -169,7 +169,15 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 		}
 	})
-	r.GET("/userinfo", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	userInfoRequest := func(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+		rw.Header().Set("Access-Control-Allow-Credentials", "true")
+		rw.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type")
+		rw.Header().Set("Access-Control-Allow-Origin", strings.TrimSuffix(req.Referer(), "/"))
+		rw.Header().Set("Access-Control-Allow-Methods", "GET")
+		if req.Method == http.MethodOptions {
+			return
+		}
+
 		token, err := oauthSrv.ValidationBearerToken(req)
 		if err != nil {
 			http.Error(rw, "403 Forbidden", http.StatusForbidden)
@@ -190,7 +198,9 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 		m["updated_at"] = time.Now().Unix()
 
 		_ = json.NewEncoder(rw).Encode(m)
-	})
+	}
+	r.GET("/userinfo", userInfoRequest)
+	r.OPTIONS("/userinfo", userInfoRequest)
 
 	return &http.Server{
 		Addr:              conf.Listen,

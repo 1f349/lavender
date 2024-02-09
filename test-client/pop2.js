@@ -71,7 +71,7 @@
         client_id,
         scope = '',
         redirect_uri = window.location.href.substr(0, window.location.href.length - window.location.hash.length).replace(/#$/, ''),
-        access_token,
+        access_token = localStorage.getItem("pop2_access_token"),
         callbackWaitForToken,
         w_width = 400,
         w_height = 360;
@@ -91,10 +91,12 @@
         receiveToken: function (token, expires_in) {
             if (token !== 'ERROR') {
                 access_token = token;
+                localStorage.setItem("pop2_access_token", access_token);
                 if (callbackWaitForToken) callbackWaitForToken(access_token);
                 setTimeout(
                     function () {
                         access_token = undefined;
+                        localStorage.removeItem("pop2_access_token");
                     },
                     expires_in * 1000
                 );
@@ -129,6 +131,31 @@
             } else {
                 return callback(access_token);
             }
+        },
+        clientRequest: function (resource, options, refresh = false) {
+            const sendRequest = function () {
+                options.credentials = 'include';
+                if (options.headers) {
+                    options.headers['Authorization'] = 'Bearer ' + access_token;
+                }
+                return fetch(resource, options);
+            };
+            if (!refresh) return sendRequest();
+            else {
+                return new Promise(function (res, rej) {
+                    sendRequest().then(function (x) {
+                        res(x)
+                    }).catch(function () {
+                        w.POP2.getToken(function () {
+                            sendRequest().then(function (x) {
+                                res(x);
+                            }).catch(function (x) {
+                                rej(x);
+                            });
+                        })
+                    });
+                });
+            }
         }
     };
-})(this);
+})(window);
