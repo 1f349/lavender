@@ -6,7 +6,7 @@
   <script>
       const ssoService = "http://localhost:9090";
 
-      POP2.init(ssoService + "/authorize", "f4cdb93d-fe28-427b-b037-f03f44c86a16", "openid profile", 500, 600);
+      POP2.init(ssoService + "/authorize", "f4cdb93d-fe28-427b-b037-f03f44c86a16", "openid profile age", 500, 600);
 
       function updateTokenInfo(data) {
           document.getElementById("someTextArea").textContent = JSON.stringify(data, null, 2);

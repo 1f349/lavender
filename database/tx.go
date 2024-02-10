@@ -138,6 +138,16 @@ func (t *Tx) UpdateUser(subject, roles string, active bool) error {
 	return err
 }
 
+func (t *Tx) UpdateUserToken(subject, accessToken, refreshToken string, expiry time.Time) error {
+	_, err := t.tx.Exec(`UPDATE users SET access_token = ?, refresh_token = ?, expiry = ? WHERE subject = ?`, accessToken, refreshToken, expiry, subject)
+	return err
+}
+
+func (t *Tx) GetUserToken(subject string, accessToken, refreshToken *string, expiry *time.Time) error {
+	row := t.tx.QueryRow(`SELECT access_token, refresh_token, expiry FROM users WHERE subject = ? LIMIT 1`, subject)
+	return row.Scan(accessToken, refreshToken, expiry)
+}
+
 func (t *Tx) UserEmailExists(email string) (exists bool, err error) {
 	row := t.tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM users WHERE email = ? and email_verified = 1)`, email)
 	err = row.Scan(&exists)

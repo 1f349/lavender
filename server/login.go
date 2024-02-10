@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/pages"
@@ -108,7 +109,7 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 		return
 	}
 
-	sessionData := h.fetchUserInfo(rw, err, flowState.sso, token)
+	sessionData, err := h.fetchUserInfo(flowState.sso, token)
 	if sessionData.ID == "" {
 		http.Error(rw, "Failed to fetch user info", http.StatusInternalServerError)
 		return
@@ -130,6 +131,12 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 	auth.Data = sessionData
 	if auth.SaveSessionData() != nil {
 		http.Error(rw, "Failed to save session", http.StatusInternalServerError)
+		return
+	}
+
+	if h.DbTx(rw, func(tx *database.Tx) error {
+		return tx.UpdateUserToken(auth.Data.ID, token.AccessToken, token.RefreshToken, token.Expiry)
+	}) {
 		return
 	}
 
@@ -199,25 +206,27 @@ func (h *HttpServer) readLoginDataCookie(rw http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	u.Data = h.fetchUserInfo(rw, err, sso, token)
+	u.Data, err = h.fetchUserInfo(sso, token)
+	if err != nil {
+		http.Error(rw, "Failed to fetch user info", http.StatusInternalServerError)
+		return
+	}
 }
 
-func (h *HttpServer) fetchUserInfo(rw http.ResponseWriter, err error, sso *issuer.WellKnownOIDC, token *oauth2.Token) SessionData {
+func (h *HttpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (SessionData, error) {
 	res, err := sso.OAuth2Config.Client(context.Background(), token).Get(sso.UserInfoEndpoint)
 	if err != nil || res.StatusCode != http.StatusOK {
-		return SessionData{}
+		return SessionData{}, fmt.Errorf("request failed")
 	}
 	defer res.Body.Close()
 
 	var userInfoJson UserInfoFields
 	if err := json.NewDecoder(res.Body).Decode(&userInfoJson); err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
-		return SessionData{}
+		return SessionData{}, err
 	}
 	subject, ok := userInfoJson.GetString("sub")
 	if !ok {
-		http.Error(rw, "Invalid subject", http.StatusInternalServerError)
-		return SessionData{}
+		return SessionData{}, fmt.Errorf("invalid subject")
 	}
 	subject += "@" + sso.Config.Namespace
 
@@ -226,5 +235,5 @@ func (h *HttpServer) fetchUserInfo(rw http.ResponseWriter, err error, sso *issue
 		ID:          subject,
 		DisplayName: displayName,
 		UserInfo:    userInfoJson,
-	}
+	}, nil
 }

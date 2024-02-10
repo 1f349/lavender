@@ -20,6 +20,7 @@ import (
 	"github.com/go-oauth2/oauth2/v4/store"
 	"github.com/go-session/session"
 	"github.com/julienschmidt/httprouter"
+	oauth22 "golang.org/x/oauth2"
 	"log"
 	"net/http"
 	"net/url"
@@ -186,6 +187,26 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 		}
 		userId := token.GetUserID()
 
+		log.Println(userId)
+		sso := hs.manager.FindServiceFromLogin(userId)
+		if sso == nil {
+			http.Error(rw, "Invalid user", http.StatusBadRequest)
+			return
+		}
+
+		var clientToken oauth22.Token
+		if hs.DbTx(rw, func(tx *database.Tx) error {
+			return tx.GetUserToken(userId, &clientToken.AccessToken, &clientToken.RefreshToken, &clientToken.Expiry)
+		}) {
+			return
+		}
+
+		info, err := hs.fetchUserInfo(sso, &clientToken)
+		if err != nil {
+			http.Error(rw, "Failed to fetch user info", http.StatusInternalServerError)
+			return
+		}
+
 		fmt.Printf("Using token for user: %s by app: %s with scope: '%s'\n", userId, token.GetClientID(), token.GetScope())
 		claims := ParseClaims(token.GetScope())
 		if !claims["openid"] {
@@ -193,7 +214,36 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 			return
 		}
 
-		m := map[string]any{}
+		m := make(map[string]any)
+
+		if claims["name"] {
+			m["name"] = info.UserInfo["name"]
+		}
+		if claims["username"] {
+			m["preferred_username"] = info.UserInfo["preferred_username"]
+		}
+		if claims["profile"] {
+			m["profile"] = info.UserInfo["profile"]
+			m["picture"] = info.UserInfo["picture"]
+			m["website"] = info.UserInfo["website"]
+		}
+		if claims["email"] {
+			m["email"] = info.UserInfo["email"]
+			m["email_verified"] = info.UserInfo["email_verified"]
+		}
+		if claims["birthdate"] {
+			m["birthdate"] = info.UserInfo["birthdate"]
+		}
+		if claims["age"] {
+			m["age"] = info.UserInfo["age"]
+		}
+		if claims["zoneinfo"] {
+			m["zoneinfo"] = info.UserInfo["zoneinfo"]
+		}
+		if claims["locale"] {
+			m["locale"] = info.UserInfo["locale"]
+		}
+
 		m["sub"] = userId
 		m["aud"] = token.GetClientID()
 		m["updated_at"] = time.Now().Unix()
