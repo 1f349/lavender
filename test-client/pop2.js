@@ -139,20 +139,21 @@
                 options.headers['Authorization'] = 'Bearer ' + access_token;
                 return new Promise(function (res, rej) {
                     fetch(resource, options).then(function (x) {
-                        if (x.statusCode >= 200 && x.statusCode < 300) res(x);
+                        if (x.status >= 200 && x.status < 300) res(x);
                         else rej(x);
                     }).catch(function (x) {
-                        rej(x);
+                        rej(["failed to send request", x]);
                     });
                 });
             };
-            const resendRequest = function() {
+            const resendRequest = function () {
                 return new Promise(function (res, rej) {
-                    w.POP2.getToken(function() {
+                    access_token = undefined;
+                    w.POP2.getToken(function () {
                         sendRequest().then(function (x) {
                             res(x);
                         }).catch(function (x) {
-                            rej(x);
+                            rej(["failed to resend request", x]);
                         });
                     });
                 });

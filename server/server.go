@@ -41,7 +41,8 @@ type HttpServer struct {
 }
 
 type flowStateData struct {
-	sso *issuer.WellKnownOIDC
+	sso      *issuer.WellKnownOIDC
+	redirect string
 }
 
 func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Server {

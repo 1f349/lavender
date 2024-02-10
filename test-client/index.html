@@ -6,24 +6,17 @@
   <script>
       const ssoService = "http://localhost:9090";
 
-      POP2.init(ssoService + "/authorize", "bc36b32c-83cb-404e-8736-cb207f30afe3", "openid profile", 500, 600);
+      POP2.init(ssoService + "/authorize", "f4cdb93d-fe28-427b-b037-f03f44c86a16", "openid profile", 500, 600);
 
       function updateTokenInfo(data) {
           document.getElementById("someTextArea").textContent = JSON.stringify(data, null, 2);
       }
 
-      function parseJwt(token) {
-          const base64Url = token.split('.')[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
-              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-          }).join(''));
-          return JSON.parse(jsonPayload);
-      }
-
       function doThisThing() {
           POP2.clientRequest(ssoService + "/userinfo", {}, true).then(function (x) {
-              console.log(x);
+              return x.json();
+          }).then(function (x) {
+              updateTokenInfo(x);
           }).catch(function (x) {
               console.error(x);
           });

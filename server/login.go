@@ -33,11 +33,13 @@ func (h *HttpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 		pages.RenderPageTemplate(rw, "login-memory", map[string]any{
 			"ServiceName": h.conf.ServiceName,
 			"LoginName":   cookie.Value,
+			"Redirect":    req.URL.Query().Get("redirect"),
 		})
 		return
 	}
 	pages.RenderPageTemplate(rw, "login", map[string]any{
 		"ServiceName": h.conf.ServiceName,
+		"Redirect":    req.URL.Query().Get("redirect"),
 	})
 }
 
@@ -85,7 +87,7 @@ func (h *HttpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 
 	// save state for use later
 	state := login.Config.Namespace + ":" + uuid.NewString()
-	h.flowState.Set(state, flowStateData{login}, time.Now().Add(15*time.Minute))
+	h.flowState.Set(state, flowStateData{login, req.PostFormValue("redirect")}, time.Now().Add(15*time.Minute))
 
 	// generate oauth2 config and redirect to authorize URL
 	oa2conf := login.OAuth2Config
@@ -134,6 +136,9 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 	if h.setLoginDataCookie(rw, auth.Data.ID, token) {
 		http.Error(rw, "Internal Server Error", http.StatusInternalServerError)
 		return
+	}
+	if flowState.redirect != "" {
+		req.Form.Set("redirect", flowState.redirect)
 	}
 	h.SafeRedirect(rw, req)
 }

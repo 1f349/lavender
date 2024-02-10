@@ -17,6 +17,7 @@
     </div>
     <div>
         <form method="POST" action="/login">
+            <input type="hidden" name="redirect" value="{{.Redirect}}"/>
             <input type="hidden" name="loginname" value="{{.LoginName}}"/>
             <button type="submit">Continue</button>
         </form>
