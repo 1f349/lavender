@@ -31,3 +31,13 @@ func (h *HttpServer) DbTx(rw http.ResponseWriter, action func(tx *database.Tx) e
 
 	return false
 }
+
+func (h *HttpServer) DbTxRaw(action func(tx *database.Tx) error) bool {
+	return h.DbTx(&fakeRW{}, action)
+}
+
+type fakeRW struct{}
+
+func (f *fakeRW) Header() http.Header         { return http.Header{} }
+func (f *fakeRW) Write(b []byte) (int, error) { return len(b), nil }
+func (f *fakeRW) WriteHeader(statusCode int)  {}

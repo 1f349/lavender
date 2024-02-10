@@ -14,13 +14,12 @@ import (
 	"github.com/1f349/lavender/theme"
 	"github.com/1f349/mjwt"
 	"github.com/go-oauth2/oauth2/v4/errors"
-	"github.com/go-oauth2/oauth2/v4/generates"
 	"github.com/go-oauth2/oauth2/v4/manage"
 	"github.com/go-oauth2/oauth2/v4/server"
 	"github.com/go-oauth2/oauth2/v4/store"
 	"github.com/go-session/session"
 	"github.com/julienschmidt/httprouter"
-	oauth22 "golang.org/x/oauth2"
+	"golang.org/x/oauth2"
 	"log"
 	"net/http"
 	"net/url"
@@ -84,7 +83,7 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 
 	oauthManager.SetAuthorizeCodeTokenCfg(manage.DefaultAuthorizeCodeTokenCfg)
 	oauthManager.MustTokenStorage(store.NewMemoryTokenStore())
-	oauthManager.MapAccessGenerate(generates.NewAccessGenerate())
+	oauthManager.MapAccessGenerate(NewJWTAccessGenerate(hs.signingKey, db))
 	oauthManager.MapClientStorage(clientStore.New(db))
 
 	oauthSrv.SetResponseErrorHandler(func(re *errors.Response) {
@@ -194,7 +193,7 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 			return
 		}
 
-		var clientToken oauth22.Token
+		var clientToken oauth2.Token
 		if hs.DbTx(rw, func(tx *database.Tx) error {
 			return tx.GetUserToken(userId, &clientToken.AccessToken, &clientToken.RefreshToken, &clientToken.Expiry)
 		}) {

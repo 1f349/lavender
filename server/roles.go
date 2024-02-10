@@ -15,3 +15,11 @@ func HasRole(roles, test string) bool {
 	}
 	return false
 }
+
+func ForEachRole(roles string, next func(role string)) {
+	sc := bufio.NewScanner(strings.NewReader(roles))
+	sc.Split(bufio.ScanWords)
+	for sc.Scan() {
+		next(sc.Text())
+	}
+}

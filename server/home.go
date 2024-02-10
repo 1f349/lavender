@@ -7,9 +7,8 @@ import (
 	"net/http"
 )
 
-func (h *HttpServer) Home(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *HttpServer) Home(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params, auth UserAuth) {
 	rw.Header().Set("Content-Type", "text/html")
-	rw.WriteHeader(http.StatusOK)
 	if auth.IsGuest() {
 		pages.RenderPageTemplate(rw, "index-guest", map[string]any{
 			"ServiceName": h.conf.ServiceName,

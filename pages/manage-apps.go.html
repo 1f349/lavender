@@ -58,6 +58,12 @@
                 <label for="field_domain">Domain:</label>
                 <input type="text" name="domain" id="field_domain" value="{{.Edit.Domain}}" required/>
             </div>
+            {{if .IsAdmin}}
+                <div>
+                    <label for="field_perms">Perms:</label>
+                    <input type="text" name="perms" id="field_perms" value="{{.Edit.Perms}}" required/>
+                </div>
+            {{end}}
             <div>
                 <label for="field_public">Public: <input type="checkbox" name="public" id="field_public" {{if .Edit.Public}}checked{{end}}/></label>
             </div>
@@ -86,6 +92,7 @@
                     <th>ID</th>
                     <th>Name</th>
                     <th>Domain</th>
+                    <th>Perms</th>
                     <th>SSO</th>
                     <th>Active</th>
                     <th>Owner</th>
@@ -98,6 +105,7 @@
                         <td>{{.Sub}}</td>
                         <td>{{.Name}}</td>
                         <td>{{.Domain}}</td>
+                        <td>{{.Perms}}</td>
                         <td>{{.SSO}}</td>
                         <td>{{.Active}}</td>
                         <td>{{.Owner}}</td>
@@ -132,6 +140,12 @@
                 <label for="field_domain">Domain:</label>
                 <input type="text" name="domain" id="field_domain" required/>
             </div>
+            {{if .IsAdmin}}
+                <div>
+                    <label for="field_perms">Perms:</label>
+                    <input type="text" name="perms" id="field_perms" required/>
+                </div>
+            {{end}}
             <div>
                 <label for="field_public">Public: <input type="checkbox" name="public" id="field_public"/></label>
             </div>

@@ -15,8 +15,8 @@ type User struct {
 }
 
 type ClientInfoDbOutput struct {
-	Sub, Name, Secret, Domain, Owner string
-	Public, SSO, Active              bool
+	Sub, Name, Secret, Domain, Owner, Perms string
+	Public, SSO, Active                     bool
 }
 
 var _ oauth2.ClientInfo = &ClientInfoDbOutput{}
@@ -37,3 +37,6 @@ func (c *ClientInfoDbOutput) IsSSO() bool { return c.SSO }
 
 // IsActive is an extra field for the app manager to get the active state
 func (c *ClientInfoDbOutput) IsActive() bool { return c.Active }
+
+// UsePerms is an extra field for the userinfo handler to return user permissions matching the requested values
+func (c *ClientInfoDbOutput) UsePerms() string { return c.Perms }

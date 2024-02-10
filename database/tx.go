@@ -6,6 +6,7 @@ import (
 	"github.com/1f349/lavender/password"
 	"github.com/go-oauth2/oauth2/v4"
 	"github.com/google/uuid"
+	"log"
 	"time"
 )
 
@@ -65,8 +66,8 @@ func (t *Tx) GetUserEmail(sub string) (string, error) {
 
 func (t *Tx) GetClientInfo(sub string) (oauth2.ClientInfo, error) {
 	var u ClientInfoDbOutput
-	row := t.tx.QueryRow(`SELECT secret, name, domain, public, sso, active FROM client_store WHERE subject = ? LIMIT 1`, sub)
-	err := row.Scan(&u.Secret, &u.Name, &u.Domain, &u.Public, &u.SSO, &u.Active)
+	row := t.tx.QueryRow(`SELECT secret, name, domain, perms, public, sso, active FROM client_store WHERE subject = ? LIMIT 1`, sub)
+	err := row.Scan(&u.Secret, &u.Name, &u.Domain, &u.Perms, &u.Public, &u.SSO, &u.Active)
 	u.Owner = sub
 	if !u.Active {
 		return nil, fmt.Errorf("client is not active")
@@ -76,14 +77,14 @@ func (t *Tx) GetClientInfo(sub string) (oauth2.ClientInfo, error) {
 
 func (t *Tx) GetAppList(owner string, admin bool, offset int) ([]ClientInfoDbOutput, error) {
 	var u []ClientInfoDbOutput
-	row, err := t.tx.Query(`SELECT subject, name, domain, owner, public, sso, active FROM client_store WHERE owner = ? OR ? = 1 LIMIT 25 OFFSET ?`, owner, admin, offset)
+	row, err := t.tx.Query(`SELECT subject, name, domain, owner, perms, public, sso, active FROM client_store WHERE owner = ? OR ? = 1 LIMIT 25 OFFSET ?`, owner, admin, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer row.Close()
 	for row.Next() {
 		var a ClientInfoDbOutput
-		err := row.Scan(&a.Sub, &a.Name, &a.Domain, &a.Owner, &a.Public, &a.SSO, &a.Active)
+		err := row.Scan(&a.Sub, &a.Name, &a.Domain, &a.Owner, &a.Perms, &a.Public, &a.SSO, &a.Active)
 		if err != nil {
 			return nil, err
 		}
@@ -92,18 +93,19 @@ func (t *Tx) GetAppList(owner string, admin bool, offset int) ([]ClientInfoDbOut
 	return u, row.Err()
 }
 
-func (t *Tx) InsertClientApp(name, domain string, public, sso, active bool, owner string) error {
+func (t *Tx) InsertClientApp(name, domain, owner, perms string, public, sso, active bool) error {
 	u := uuid.New()
 	secret, err := password.GenerateApiSecret(70)
 	if err != nil {
 		return err
 	}
-	_, err = t.tx.Exec(`INSERT INTO client_store (subject, name, secret, domain, owner, public, sso, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, u.String(), name, secret, domain, owner, public, sso, active)
+	_, err = t.tx.Exec(`INSERT INTO client_store (subject, name, secret, domain, owner, perms, public, sso, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, u.String(), name, secret, domain, owner, perms, public, sso, active)
 	return err
 }
 
-func (t *Tx) UpdateClientApp(subject uuid.UUID, owner string, name, domain string, public, sso, active bool) error {
-	_, err := t.tx.Exec(`UPDATE client_store SET name = ?, domain = ?, public = ?, sso = ?, active = ? WHERE subject = ? AND owner = ?`, name, domain, public, sso, active, subject.String(), owner)
+func (t *Tx) UpdateClientApp(subject uuid.UUID, owner, name, domain, perms string, hasPerms, public, sso, active bool) error {
+	log.Println(hasPerms, perms)
+	_, err := t.tx.Exec(`UPDATE client_store SET name = ?, domain = ?, perms = CASE WHEN ? = true THEN ? ELSE perms END, public = ?, sso = ?, active = ? WHERE subject = ? AND owner = ?`, name, domain, hasPerms, perms, public, sso, active, subject.String(), owner)
 	return err
 }
 

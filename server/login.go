@@ -1,13 +1,12 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -129,7 +128,7 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 
 	// only continues if the above tx succeeds
 	auth.Data = sessionData
-	if auth.SaveSessionData() != nil {
+	if err := auth.SaveSessionData(); err != nil {
 		http.Error(rw, "Failed to save session", http.StatusInternalServerError)
 		return
 	}
@@ -140,8 +139,8 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 		return
 	}
 
-	if h.setLoginDataCookie(rw, auth.Data.ID, token) {
-		http.Error(rw, "Internal Server Error", http.StatusInternalServerError)
+	if h.setLoginDataCookie(rw, auth.Data.ID) {
+		http.Error(rw, "Failed to save login cookie", http.StatusInternalServerError)
 		return
 	}
 	if flowState.redirect != "" {
@@ -150,22 +149,15 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 	h.SafeRedirect(rw, req)
 }
 
-func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, userId string, token *oauth2.Token) bool {
-	buf := new(bytes.Buffer)
-	buf.WriteString(userId)
-	buf.WriteByte(0)
-	err := json.NewEncoder(buf).Encode(token)
+func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, userId string) bool {
+	encData, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, h.signingKey.PublicKey(), []byte(userId), []byte("lavender-login-data"))
 	if err != nil {
 		return true
 	}
-	encryptedData, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, h.signingKey.PublicKey(), buf.Bytes(), []byte("lavender-login-data"))
-	if err != nil {
-		return true
-	}
-	encryptedString := base64.RawStdEncoding.EncodeToString(encryptedData)
+
 	http.SetCookie(rw, &http.Cookie{
 		Name:     "lavender-login-data",
-		Value:    encryptedString,
+		Value:    hex.EncodeToString(encData),
 		Path:     "/",
 		Expires:  time.Now().AddDate(0, 3, 0),
 		Secure:   true,
@@ -174,30 +166,25 @@ func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, userId string, t
 	return false
 }
 
-func (h *HttpServer) readLoginDataCookie(rw http.ResponseWriter, req *http.Request, u *UserAuth) {
+func (h *HttpServer) readLoginDataCookie(req *http.Request, u *UserAuth) {
 	loginCookie, err := req.Cookie("lavender-login-data")
 	if err != nil {
 		return
 	}
-	decryptedBytes, err := base64.RawStdEncoding.DecodeString(loginCookie.Value)
+	hexData, err := hex.DecodeString(loginCookie.Value)
 	if err != nil {
 		return
 	}
-	decryptedData, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, h.signingKey.PrivateKey(), decryptedBytes, []byte("lavender-login-data"))
+	decData, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, h.signingKey.PrivateKey(), hexData, []byte("lavender-login-data"))
 	if err != nil {
 		return
 	}
 
-	buf := bytes.NewBuffer(decryptedData)
-	userId, err := buf.ReadString(0)
-	if err != nil {
-		return
-	}
-	userId = strings.TrimSuffix(userId, "\x00")
-
-	var token *oauth2.Token
-	err = json.NewDecoder(buf).Decode(&token)
-	if err != nil {
+	userId := string(decData)
+	var token oauth2.Token
+	if h.DbTxRaw(func(tx *database.Tx) error {
+		return tx.GetUserToken(userId, &token.AccessToken, &token.RefreshToken, &token.Expiry)
+	}) {
 		return
 	}
 
@@ -206,11 +193,7 @@ func (h *HttpServer) readLoginDataCookie(rw http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	u.Data, err = h.fetchUserInfo(sso, token)
-	if err != nil {
-		http.Error(rw, "Failed to fetch user info", http.StatusInternalServerError)
-		return
-	}
+	u.Data, _ = h.fetchUserInfo(sso, &token)
 }
 
 func (h *HttpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (SessionData, error) {

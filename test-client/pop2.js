@@ -104,14 +104,10 @@
                 callbackWaitForToken = undefined;
             }
         },
-        // boolean, indicate logged in or not
-        isLoggedIn: function () {
-            return !!access_token;
-        },
         // pass the access token to callback
         // if not logged in this triggers login popup;
         // use isLoggedIn to check login first to prevent popup blocker
-        getToken: function (callback) {
+        getToken: function (callback, popup = true) {
             if (!client_id || !redirect_uri || !scope) {
                 alert('You need init() first. Check the program flow.');
                 return false;
@@ -128,8 +124,10 @@
                     w_width,
                     w_height
                 );
+                return false;
             } else {
-                return callback(access_token);
+                callback(access_token);
+                return true;
             }
         },
         clientRequest: function (resource, options, refresh = false) {
@@ -159,8 +157,10 @@
                 });
             };
 
-            if (!refresh) return sendRequest();
-            else {
+            if (!refresh) {
+                if (!access_token) return Promise.reject("missing access token");
+                return sendRequest();
+            } else {
                 return new Promise(function (res, rej) {
                     sendRequest().then(function (x) {
                         res(x);

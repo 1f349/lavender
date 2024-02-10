@@ -72,11 +72,12 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 	action := req.Form.Get("action")
 	name := req.Form.Get("name")
 	domain := req.Form.Get("domain")
+	hasPerms := req.Form.Has("perms")
 	public := req.Form.Has("public")
 	sso := req.Form.Has("sso")
 	active := req.Form.Has("active")
 
-	if sso {
+	if sso || hasPerms {
 		var roles string
 		if h.DbTx(rw, func(tx *database.Tx) (err error) {
 			roles, err = tx.GetUserRoles(auth.Data.ID)
@@ -85,15 +86,19 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 			return
 		}
 		if !HasRole(roles, "lavender:admin") {
-			http.Error(rw, "400 Bad Request: Only admin users can create SSO client applications", http.StatusBadRequest)
+			http.Error(rw, "400 Bad Request: Only admin users can create SSO client applications or edit required permissions", http.StatusBadRequest)
 			return
 		}
+	}
+	var perms string
+	if hasPerms {
+		perms = req.Form.Get("perms")
 	}
 
 	switch action {
 	case "create":
 		if h.DbTx(rw, func(tx *database.Tx) error {
-			return tx.InsertClientApp(name, domain, public, sso, active, auth.Data.ID)
+			return tx.InsertClientApp(name, domain, auth.Data.ID, perms, public, sso, active)
 		}) {
 			return
 		}
@@ -103,7 +108,7 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 			if err != nil {
 				return err
 			}
-			return tx.UpdateClientApp(sub, auth.Data.ID, name, domain, public, sso, active)
+			return tx.UpdateClientApp(sub, auth.Data.ID, name, domain, perms, hasPerms, public, sso, active)
 		}) {
 			return
 		}
