@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/pages"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
@@ -16,6 +17,13 @@ func (h *HttpServer) Home(rw http.ResponseWriter, _ *http.Request, _ httprouter.
 		return
 	}
 
+	var isAdmin bool
+	h.DbTx(rw, func(tx *database.Tx) (err error) {
+		roles, err := tx.GetUserRoles(auth.Data.ID)
+		isAdmin = HasRole(roles, "lavender:admin")
+		return err
+	})
+
 	lNonce := uuid.NewString()
 	auth.Session.Set("action-nonce", lNonce)
 	if auth.Session.Save() != nil {
@@ -29,5 +37,6 @@ func (h *HttpServer) Home(rw http.ResponseWriter, _ *http.Request, _ httprouter.
 		"Subject":     auth.Data.ID,
 		"DisplayName": auth.Data.DisplayName,
 		"Nonce":       lNonce,
+		"IsAdmin":     isAdmin,
 	})
 }
