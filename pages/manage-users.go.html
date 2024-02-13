@@ -68,19 +68,15 @@
                         <th>{{.UpdatedAt}}</th>
                         <td>{{.Active}}</td>
                         <td>
-                            {{if eq $.CurrentAdmin .Sub}}
-                                <span></span>
-                            {{else}}
-                                <form method="GET" action="/manage/users">
-                                    <input type="hidden" name="offset" value="{{$.Offset}}"/>
-                                    <input type="hidden" name="edit" value="{{.Sub}}"/>
-                                    <button type="submit">Edit</button>
-                                </form>
-                                <form method="POST" action="/reset-password">
-                                    <input type="hidden" name="email" value="{{.Email}}"/>
-                                    <button type="submit">Send Reset Password Email</button>
-                                </form>
-                            {{end}}
+                            <form method="GET" action="/manage/users">
+                                <input type="hidden" name="offset" value="{{$.Offset}}"/>
+                                <input type="hidden" name="edit" value="{{.Sub}}"/>
+                                <button type="submit">Edit</button>
+                            </form>
+                            <form method="POST" action="/reset-password">
+                                <input type="hidden" name="email" value="{{.Email}}"/>
+                                <button type="submit">Send Reset Password Email</button>
+                            </form>
                         </td>
                     </tr>
                 {{end}}
