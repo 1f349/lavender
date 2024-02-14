@@ -220,6 +220,7 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 		}
 		if claims["username"] {
 			m["preferred_username"] = info.UserInfo["preferred_username"]
+			m["login"] = info.UserInfo["login"]
 		}
 		if claims["profile"] {
 			m["profile"] = info.UserInfo["profile"]
