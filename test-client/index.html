@@ -6,7 +6,7 @@
   <script>
       const ssoService = "http://localhost:9090";
 
-      POP2.init(ssoService + "/authorize", "f4cdb93d-fe28-427b-b037-f03f44c86a16", "openid profile age", 500, 600);
+      POP2.init(ssoService + "/authorize", "f4cdb93d-fe28-427b-b037-f03f44c86a16", "openid profile age email", 500, 600);
 
       window.addEventListener("load", function () {
           doThisThing(false);

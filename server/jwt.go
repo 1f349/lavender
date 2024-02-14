@@ -36,15 +36,14 @@ func (j *JWTAccessGenerate) Token(ctx context.Context, data *oauth2.GenerateBasi
 	}
 	beginCtx.Rollback()
 
-	ps := claims.NewPermStorage()
+	ps := claims.ParsePermStorage(roles)
+	var out *claims.PermStorage
 	ForEachRole(data.Client.(interface{ UsePerms() string }).UsePerms(), func(role string) {
-		if HasRole(roles, role) {
-			ps.Set(role)
-		}
+		out = ps.Filter(strings.Split(role, " "))
 	})
 
 	access, err = j.signer.GenerateJwt(data.UserID, "", jwt.ClaimStrings{data.TokenInfo.GetClientID()}, data.TokenInfo.GetAccessExpiresIn(), auth.AccessTokenClaims{
-		Perms: ps,
+		Perms: out,
 	})
 
 	if isGenRefresh {
