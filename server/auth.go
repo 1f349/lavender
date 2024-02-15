@@ -64,7 +64,7 @@ func (h *HttpServer) OptionalAuthentication(next UserHandler) httprouter.Handle 
 }
 
 func (h *HttpServer) internalAuthenticationHandler(req *http.Request) (UserAuth, error) {
-	if loginCookie, err := req.Cookie("tulip-login-data"); err == nil {
+	if loginCookie, err := req.Cookie("lavender-login-data"); err == nil {
 		_, b, err := mjwt.ExtractClaims[auth.AccessTokenClaims](h.signingKey, loginCookie.Value)
 		if err != nil {
 			return UserAuth{}, err
