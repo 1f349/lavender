@@ -17,7 +17,6 @@ import (
 	"github.com/go-oauth2/oauth2/v4/manage"
 	"github.com/go-oauth2/oauth2/v4/server"
 	"github.com/go-oauth2/oauth2/v4/store"
-	"github.com/go-session/session"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/oauth2"
 	"log"
@@ -46,8 +45,6 @@ type flowStateData struct {
 }
 
 func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Server {
-	session.InitManager(session.SetCookieName("lavender_session"))
-
 	r := httprouter.New()
 
 	// remove last slash from baseUrl
@@ -126,20 +123,14 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 	r.POST("/login", hs.OptionalAuthentication(hs.loginPost))
 	r.GET("/callback", hs.OptionalAuthentication(hs.loginCallback))
 	r.POST("/logout", hs.RequireAuthentication(func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
-		lNonce, ok := auth.Session.Get("action-nonce")
-		if !ok {
-			http.Error(rw, "Missing nonce", http.StatusInternalServerError)
+		cookie, err := req.Cookie("tulip-nonce")
+		if err != nil {
+			http.Error(rw, "Missing nonce", http.StatusBadRequest)
 			return
 		}
-		if subtle.ConstantTimeCompare([]byte(lNonce.(string)), []byte(req.PostFormValue("nonce"))) == 1 {
-			auth.Session.Delete("session-data")
-			if auth.Session.Save() != nil {
-				http.Error(rw, "Failed to save session", http.StatusInternalServerError)
-				return
-			}
-
+		if subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(req.PostFormValue("nonce"))) == 1 {
 			http.SetCookie(rw, &http.Cookie{
-				Name:     "lavender-login-data",
+				Name:     "tulip-login-data",
 				Path:     "/",
 				MaxAge:   -1,
 				Secure:   true,

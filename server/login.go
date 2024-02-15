@@ -127,19 +127,15 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 	}
 
 	// only continues if the above tx succeeds
-	auth.Data = sessionData
-	if err := auth.SaveSessionData(); err != nil {
-		http.Error(rw, "Failed to save session", http.StatusInternalServerError)
-		return
-	}
+	auth = sessionData
 
 	if h.DbTx(rw, func(tx *database.Tx) error {
-		return tx.UpdateUserToken(auth.Data.ID, token.AccessToken, token.RefreshToken, token.Expiry)
+		return tx.UpdateUserToken(auth.ID, token.AccessToken, token.RefreshToken, token.Expiry)
 	}) {
 		return
 	}
 
-	if h.setLoginDataCookie(rw, auth.Data.ID) {
+	if h.setLoginDataCookie(rw, auth.ID) {
 		http.Error(rw, "Failed to save login cookie", http.StatusInternalServerError)
 		return
 	}
@@ -193,28 +189,28 @@ func (h *HttpServer) readLoginDataCookie(req *http.Request, u *UserAuth) {
 		return
 	}
 
-	u.Data, _ = h.fetchUserInfo(sso, &token)
+	*u, _ = h.fetchUserInfo(sso, &token)
 }
 
-func (h *HttpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (SessionData, error) {
+func (h *HttpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (UserAuth, error) {
 	res, err := sso.OAuth2Config.Client(context.Background(), token).Get(sso.UserInfoEndpoint)
 	if err != nil || res.StatusCode != http.StatusOK {
-		return SessionData{}, fmt.Errorf("request failed")
+		return UserAuth{}, fmt.Errorf("request failed")
 	}
 	defer res.Body.Close()
 
 	var userInfoJson UserInfoFields
 	if err := json.NewDecoder(res.Body).Decode(&userInfoJson); err != nil {
-		return SessionData{}, err
+		return UserAuth{}, err
 	}
 	subject, ok := userInfoJson.GetString("sub")
 	if !ok {
-		return SessionData{}, fmt.Errorf("invalid subject")
+		return UserAuth{}, fmt.Errorf("invalid subject")
 	}
 	subject += "@" + sso.Config.Namespace
 
 	displayName := userInfoJson.GetStringOrDefault("name", "Unknown Name")
-	return SessionData{
+	return UserAuth{
 		ID:          subject,
 		DisplayName: displayName,
 		UserInfo:    userInfoJson,

@@ -24,7 +24,7 @@ func (h *HttpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _
 	var roles string
 	var userList []database.User
 	if h.DbTx(rw, func(tx *database.Tx) (err error) {
-		roles, err = tx.GetUserRoles(auth.Data.ID)
+		roles, err = tx.GetUserRoles(auth.ID)
 		if err != nil {
 			return
 		}
@@ -43,7 +43,7 @@ func (h *HttpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _
 		"Users":        userList,
 		"Offset":       offset,
 		"EmailShow":    req.URL.Query().Has("show-email"),
-		"CurrentAdmin": auth.Data.ID,
+		"CurrentAdmin": auth.ID,
 	}
 	if q.Has("edit") {
 		for _, i := range userList {
@@ -71,7 +71,7 @@ func (h *HttpServer) ManageUsersPost(rw http.ResponseWriter, req *http.Request, 
 
 	var roles string
 	if h.DbTx(rw, func(tx *database.Tx) (err error) {
-		roles, err = tx.GetUserRoles(auth.Data.ID)
+		roles, err = tx.GetUserRoles(auth.ID)
 		return
 	}) {
 		return

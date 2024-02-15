@@ -87,7 +87,7 @@ func (h *HttpServer) authorizeEndpoint(rw http.ResponseWriter, req *http.Request
 			"ServiceName":  h.conf.ServiceName,
 			"AppName":      appName,
 			"AppDomain":    appDomain,
-			"DisplayName":  auth.Data.DisplayName,
+			"DisplayName":  auth.DisplayName,
 			"WantsList":    scope.FancyScopeList(scopeList),
 			"ResponseType": form.Get("response_type"),
 			"ResponseMode": form.Get("response_mode"),
@@ -125,7 +125,7 @@ func (h *HttpServer) oauthUserAuthorization(rw http.ResponseWriter, req *http.Re
 		return "", err
 	}
 
-	auth, err := internalAuthenticationHandler(rw, req)
+	auth, err := h.internalAuthenticationHandler(req)
 	if err != nil {
 		return "", err
 	}
@@ -147,5 +147,5 @@ func (h *HttpServer) oauthUserAuthorization(rw http.ResponseWriter, req *http.Re
 		http.Redirect(rw, req, redirectUrl.String(), http.StatusFound)
 		return "", nil
 	}
-	return auth.Data.ID, nil
+	return auth.ID, nil
 }

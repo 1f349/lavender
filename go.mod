@@ -9,14 +9,13 @@ require (
 	github.com/1f349/violet v0.0.13
 	github.com/MrMelon54/exit-reload v0.0.1
 	github.com/go-oauth2/oauth2/v4 v4.5.2
-	github.com/go-session/session v3.1.2+incompatible
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/subcommands v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/stretchr/testify v1.8.4
-	golang.org/x/oauth2 v0.16.0
+	golang.org/x/oauth2 v0.17.0
 )
 
 require (
@@ -30,7 +29,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/tidwall/btree v1.7.0 // indirect
 	github.com/tidwall/buntdb v1.3.0 // indirect
-	github.com/tidwall/gjson v1.17.0 // indirect
+	github.com/tidwall/gjson v1.17.1 // indirect
 	github.com/tidwall/grect v0.1.4 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
