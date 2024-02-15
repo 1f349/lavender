@@ -83,7 +83,7 @@ func (h *HttpServer) ManageUsersPost(rw http.ResponseWriter, req *http.Request, 
 
 	offset := req.Form.Get("offset")
 	action := req.Form.Get("action")
-	newRoles := req.Form.Get("role")
+	newRoles := req.Form.Get("roles")
 	active := req.Form.Has("active")
 
 	switch action {
