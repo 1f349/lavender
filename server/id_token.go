@@ -25,10 +25,12 @@ func addIdTokenSupport(srv *server.Server, db *database.DB, key mjwt.Signer) {
 }
 
 // IdTokenClaims contains the JWT claims for an access token
-type IdTokenClaims struct{}
+type IdTokenClaims struct {
+	Subject string `json:"subject"`
+}
 
 func (a IdTokenClaims) Valid() error { return nil }
-func (a IdTokenClaims) Type() string { return "access-token" }
+func (a IdTokenClaims) Type() string { return "id-token" }
 
 func generateIDToken(ti oauth2.TokenInfo, us *database.DB, key mjwt.Signer) (token string, err error) {
 	tx, err := us.Begin()
@@ -41,7 +43,7 @@ func generateIDToken(ti oauth2.TokenInfo, us *database.DB, key mjwt.Signer) (tok
 	}
 	tx.Rollback()
 
-	token, err = key.GenerateJwt(user.Sub, "", jwt.ClaimStrings{ti.GetClientID()}, ti.GetAccessExpiresIn(), IdTokenClaims{})
+	token, err = key.GenerateJwt(user.Sub, "", jwt.ClaimStrings{ti.GetClientID()}, ti.GetAccessExpiresIn(), &IdTokenClaims{Subject: user.Sub})
 	return
 }
 

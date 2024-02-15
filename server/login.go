@@ -56,7 +56,7 @@ func (h *HttpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 			Path:     "/",
 			MaxAge:   -1,
 			Secure:   true,
-			SameSite: http.SameSiteStrictMode,
+			SameSite: http.SameSiteLaxMode,
 		})
 		http.Redirect(rw, req, (&url.URL{
 			Path: "/login",
@@ -82,7 +82,7 @@ func (h *HttpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 		Expires:  future,
 		MaxAge:   int(future.Sub(now).Seconds()),
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 	})
 
 	// save state for use later
@@ -161,7 +161,7 @@ func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, userId string) b
 		Path:     "/",
 		Expires:  time.Now().AddDate(0, 3, 0),
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 	})
 	return false
 }
