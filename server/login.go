@@ -13,6 +13,9 @@ import (
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/pages"
+	"github.com/1f349/mjwt/auth"
+	"github.com/1f349/mjwt/claims"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/oauth2"
@@ -135,7 +138,7 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 		return
 	}
 
-	if h.setLoginDataCookie(rw, auth.ID) {
+	if h.setLoginDataCookie(rw, auth) {
 		http.Error(rw, "Failed to save login cookie", http.StatusInternalServerError)
 		return
 	}
@@ -145,15 +148,18 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 	h.SafeRedirect(rw, req)
 }
 
-func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, userId string) bool {
-	encData, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, h.signingKey.PublicKey(), []byte(userId), []byte("lavender-login-data"))
+const oneYear = 365 * 24 * time.Hour
+
+func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAuth) bool {
+	ps := claims.NewPermStorage()
+	gen, err := h.signingKey.GenerateJwt(authData.ID, uuid.NewString(), jwt.ClaimStrings{h.conf.BaseUrl}, oneYear, auth.AccessTokenClaims{Perms: ps})
 	if err != nil {
+		http.Error(rw, "Failed to generate cookie token", http.StatusInternalServerError)
 		return true
 	}
-
 	http.SetCookie(rw, &http.Cookie{
 		Name:     "lavender-login-data",
-		Value:    hex.EncodeToString(encData),
+		Value:    gen,
 		Path:     "/",
 		Expires:  time.Now().AddDate(0, 3, 0),
 		Secure:   true,
