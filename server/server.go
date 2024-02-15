@@ -167,8 +167,6 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 	r.GET("/authorize", hs.RequireAuthentication(hs.authorizeEndpoint))
 	r.POST("/authorize", hs.RequireAuthentication(hs.authorizeEndpoint))
 	r.POST("/token", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		// TODO: id_token support
-		// https://code.mrmelon54.com/melon/summer/src/commit/7b8afa8b91c39eba749f60a45965fd8f75c87147/pkg/oauth-server/server.go#L216
 		if err := oauthSrv.HandleTokenRequest(rw, req); err != nil {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 		}
