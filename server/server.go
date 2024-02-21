@@ -123,14 +123,14 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 	r.POST("/login", hs.OptionalAuthentication(hs.loginPost))
 	r.GET("/callback", hs.OptionalAuthentication(hs.loginCallback))
 	r.POST("/logout", hs.RequireAuthentication(func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
-		cookie, err := req.Cookie("tulip-nonce")
+		cookie, err := req.Cookie("lavender-nonce")
 		if err != nil {
 			http.Error(rw, "Missing nonce", http.StatusBadRequest)
 			return
 		}
 		if subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(req.PostFormValue("nonce"))) == 1 {
 			http.SetCookie(rw, &http.Cookie{
-				Name:     "tulip-login-data",
+				Name:     "lavender-login-data",
 				Path:     "/",
 				MaxAge:   -1,
 				Secure:   true,

@@ -13,7 +13,7 @@ func (h *HttpServer) Home(rw http.ResponseWriter, _ *http.Request, _ httprouter.
 	rw.Header().Set("Content-Type", "text/html")
 	lNonce := uuid.NewString()
 	http.SetCookie(rw, &http.Cookie{
-		Name:     "tulip-nonce",
+		Name:     "lavender-nonce",
 		Value:    lNonce,
 		Path:     "/",
 		Expires:  time.Now().Add(10 * time.Minute),
