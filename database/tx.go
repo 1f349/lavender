@@ -56,7 +56,7 @@ func (t *Tx) GetUserRoles(sub string) (string, error) {
 
 func (t *Tx) GetUser(sub string) (*User, error) {
 	var u User
-	row := t.tx.QueryRow(`SELECT email, email_verified, roles, userifo, updated_at, active FROM users WHERE subject = ?`, sub)
+	row := t.tx.QueryRow(`SELECT email, email_verified, roles, userinfo, updated_at, active FROM users WHERE subject = ?`, sub)
 	err := row.Scan(&u.Email, &u.EmailVerified, &u.Roles, &u.UserInfo, &u.UpdatedAt, &u.Active)
 	u.Sub = sub
 	return &u, err
