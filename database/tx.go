@@ -37,8 +37,13 @@ func (t *Tx) HasUser() error {
 	return nil
 }
 
-func (t *Tx) InsertUser(subject, email string, verifyEmail bool, roles string, active bool) error {
-	_, err := t.tx.Exec(`INSERT INTO users (subject, email, email_verified, roles, updated_at, active) VALUES (?, ?, ?, ?, ?, ?)`, subject, email, verifyEmail, roles, updatedAt(), active)
+func (t *Tx) InsertUser(subject, email string, verifyEmail bool, roles, userinfo string, active bool) error {
+	_, err := t.tx.Exec(`INSERT INTO users (subject, email, email_verified, roles, userinfo, updated_at, active) VALUES (?, ?, ?, ?, ?, ?, ?)`, subject, email, verifyEmail, roles, userinfo, updatedAt(), active)
+	return err
+}
+
+func (t *Tx) UpdateUserInfo(subject, email string, verified bool, userinfo string) error {
+	_, err := t.tx.Exec(`UPDATE users SET email = ?, email_verified = ?, userinfo = ? WHERE subject = ?`, email, verified, userinfo, subject)
 	return err
 }
 
@@ -51,8 +56,8 @@ func (t *Tx) GetUserRoles(sub string) (string, error) {
 
 func (t *Tx) GetUser(sub string) (*User, error) {
 	var u User
-	row := t.tx.QueryRow(`SELECT email, email_verified, roles, updated_at, active FROM users WHERE subject = ?`, sub)
-	err := row.Scan(&u.Email, &u.EmailVerified, &u.Roles, &u.UpdatedAt, &u.Active)
+	row := t.tx.QueryRow(`SELECT email, email_verified, roles, userifo, updated_at, active FROM users WHERE subject = ?`, sub)
+	err := row.Scan(&u.Email, &u.EmailVerified, &u.Roles, &u.UserInfo, &u.UpdatedAt, &u.Active)
 	u.Sub = sub
 	return &u, err
 }

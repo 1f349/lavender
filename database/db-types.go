@@ -10,6 +10,7 @@ type User struct {
 	Email         string    `json:"email"`
 	EmailVerified bool      `json:"email_verified"`
 	Roles         string    `json:"roles"`
+	UserInfo      string    `json:"userinfo"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	Active        bool      `json:"active"`
 }

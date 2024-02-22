@@ -118,13 +118,19 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 	}
 
 	if h.DbTx(rw, func(tx *database.Tx) error {
-		_, err := tx.GetUser(sessionData.ID)
+		jBytes, err := json.Marshal(sessionData.UserInfo)
+		if err != nil {
+			return err
+		}
+		_, err = tx.GetUser(sessionData.ID)
 		if errors.Is(err, sql.ErrNoRows) {
 			uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
 			uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
-			return tx.InsertUser(sessionData.ID, uEmail, uEmailVerified, "", true)
+			return tx.InsertUser(sessionData.ID, uEmail, uEmailVerified, "", string(jBytes), true)
 		}
-		return err
+		uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
+		uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
+		return tx.UpdateUserInfo(sessionData.ID, uEmail, uEmailVerified, string(jBytes))
 	}) {
 		return
 	}

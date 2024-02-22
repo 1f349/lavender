@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS users
     email          TEXT                    NOT NULL,
     email_verified INTEGER DEFAULT 0       NOT NULL,
     roles          TEXT                    NOT NULL,
+    userinfo       TEXT,
     access_token   TEXT,
     refresh_token  TEXT,
     expiry         DATETIME,

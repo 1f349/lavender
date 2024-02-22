@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"encoding/json"
-	"fmt"
 	"github.com/1f349/cache"
 	clientStore "github.com/1f349/lavender/client-store"
 	"github.com/1f349/lavender/database"
@@ -18,7 +17,6 @@ import (
 	"github.com/go-oauth2/oauth2/v4/server"
 	"github.com/go-oauth2/oauth2/v4/store"
 	"github.com/julienschmidt/httprouter"
-	"golang.org/x/oauth2"
 	"log"
 	"net/http"
 	"net/url"
@@ -185,20 +183,21 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 			return
 		}
 
-		var clientToken oauth2.Token
-		if hs.DbTx(rw, func(tx *database.Tx) error {
-			return tx.GetUserToken(userId, &clientToken.AccessToken, &clientToken.RefreshToken, &clientToken.Expiry)
+		var user *database.User
+		if hs.DbTx(rw, func(tx *database.Tx) (err error) {
+			user, err = tx.GetUser(userId)
+			return err
 		}) {
 			return
 		}
 
-		info, err := hs.fetchUserInfo(sso, &clientToken)
+		var userInfo UserInfoFields
+		err = json.Unmarshal([]byte(user.UserInfo), &userInfo)
 		if err != nil {
-			http.Error(rw, "Failed to fetch user info", http.StatusInternalServerError)
+			http.Error(rw, "500 Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 
-		fmt.Printf("Using token for user: %s by app: %s with scope: '%s'\n", userId, token.GetClientID(), token.GetScope())
 		claims := ParseClaims(token.GetScope())
 		if !claims["openid"] {
 			http.Error(rw, "Invalid scope", http.StatusBadRequest)
@@ -208,32 +207,32 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 		m := make(map[string]any)
 
 		if claims["name"] {
-			m["name"] = info.UserInfo["name"]
+			m["name"] = userInfo["name"]
 		}
 		if claims["username"] {
-			m["preferred_username"] = info.UserInfo["preferred_username"]
-			m["login"] = info.UserInfo["login"]
+			m["preferred_username"] = userInfo["preferred_username"]
+			m["login"] = userInfo["login"]
 		}
 		if claims["profile"] {
-			m["profile"] = info.UserInfo["profile"]
-			m["picture"] = info.UserInfo["picture"]
-			m["website"] = info.UserInfo["website"]
+			m["profile"] = userInfo["profile"]
+			m["picture"] = userInfo["picture"]
+			m["website"] = userInfo["website"]
 		}
 		if claims["email"] {
-			m["email"] = info.UserInfo["email"]
-			m["email_verified"] = info.UserInfo["email_verified"]
+			m["email"] = userInfo["email"]
+			m["email_verified"] = userInfo["email_verified"]
 		}
 		if claims["birthdate"] {
-			m["birthdate"] = info.UserInfo["birthdate"]
+			m["birthdate"] = userInfo["birthdate"]
 		}
 		if claims["age"] {
-			m["age"] = info.UserInfo["age"]
+			m["age"] = userInfo["age"]
 		}
 		if claims["zoneinfo"] {
-			m["zoneinfo"] = info.UserInfo["zoneinfo"]
+			m["zoneinfo"] = userInfo["zoneinfo"]
 		}
 		if claims["locale"] {
-			m["locale"] = info.UserInfo["locale"]
+			m["locale"] = userInfo["locale"]
 		}
 
 		m["sub"] = userId
