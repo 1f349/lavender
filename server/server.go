@@ -176,7 +176,6 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 		}
 		userId := token.GetUserID()
 
-		log.Println(userId)
 		sso := hs.manager.FindServiceFromLogin(userId)
 		if sso == nil {
 			http.Error(rw, "Invalid user", http.StatusBadRequest)
