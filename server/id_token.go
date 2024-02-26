@@ -37,11 +37,11 @@ func generateIDToken(ti oauth2.TokenInfo, us *database.DB, key mjwt.Signer) (tok
 	if err != nil {
 		return "", err
 	}
+	defer tx.Rollback()
 	user, err := tx.GetUser(ti.GetUserID())
 	if err != nil {
 		return "", err
 	}
-	tx.Rollback()
 
 	token, err = key.GenerateJwt(user.Sub, "", jwt.ClaimStrings{ti.GetClientID()}, ti.GetAccessExpiresIn(), &IdTokenClaims{Subject: user.Sub})
 	return
