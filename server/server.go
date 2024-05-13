@@ -8,6 +8,7 @@ import (
 	clientStore "github.com/1f349/lavender/client-store"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
+	"github.com/1f349/lavender/logger"
 	"github.com/1f349/lavender/openid"
 	scope2 "github.com/1f349/lavender/scope"
 	"github.com/1f349/lavender/theme"
@@ -17,7 +18,6 @@ import (
 	"github.com/go-oauth2/oauth2/v4/server"
 	"github.com/go-oauth2/oauth2/v4/store"
 	"github.com/julienschmidt/httprouter"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -56,7 +56,7 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 	openIdConf := openid.GenConfig(conf.BaseUrl, []string{"openid", "name", "username", "profile", "email", "birthdate", "age", "zoneinfo", "locale"}, []string{"sub", "name", "preferred_username", "profile", "picture", "website", "email", "email_verified", "gender", "birthdate", "zoneinfo", "locale", "updated_at"})
 	openIdBytes, err := json.Marshal(openIdConf)
 	if err != nil {
-		log.Fatalln("Failed to generate OpenID configuration:", err)
+		logger.Logger.Fatal("Failed to generate OpenID configuration", "err", err)
 	}
 
 	oauthManager := manage.NewDefaultManager()
@@ -73,7 +73,7 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 
 	hs.manager, err = issuer.NewManager(conf.SsoServices)
 	if err != nil {
-		log.Fatal("Failed to reload SSO service manager: %w", err)
+		logger.Logger.Fatal("Failed to reload SSO service manager", "err", err)
 	}
 
 	oauthManager.SetAuthorizeCodeTokenCfg(manage.DefaultAuthorizeCodeTokenCfg)
@@ -81,9 +81,6 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 	oauthManager.MapAccessGenerate(NewJWTAccessGenerate(hs.signingKey, db))
 	oauthManager.MapClientStorage(clientStore.New(db))
 
-	oauthSrv.SetResponseErrorHandler(func(re *errors.Response) {
-		log.Printf("Response error: %#v\n", re)
-	})
 	oauthSrv.SetClientInfoHandler(func(req *http.Request) (clientID, clientSecret string, err error) {
 		cId, cSecret, err := server.ClientBasicHandler(req)
 		if cId == "" && cSecret == "" {

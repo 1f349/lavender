@@ -4,11 +4,11 @@ import (
 	"embed"
 	_ "embed"
 	"errors"
+	"github.com/1f349/lavender/logger"
 	"github.com/1f349/overlapfs"
 	"html/template"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -43,7 +43,7 @@ func LoadPages(wd string) (err error) {
 func RenderPageTemplate(wr io.Writer, name string, data any) {
 	err := wwwTemplates.ExecuteTemplate(wr, name+".go.html", data)
 	if err != nil {
-		log.Printf("Failed to render page: %s: %s\n", name, err)
+		logger.Logger.Warn("Failed to render page", "name", name, "err", err)
 	}
 }
 

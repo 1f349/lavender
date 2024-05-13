@@ -6,7 +6,6 @@ import (
 	"github.com/1f349/lavender/password"
 	"github.com/go-oauth2/oauth2/v4"
 	"github.com/google/uuid"
-	"log"
 	"time"
 )
 
@@ -109,7 +108,6 @@ func (t *Tx) InsertClientApp(name, domain, owner, perms string, public, sso, act
 }
 
 func (t *Tx) UpdateClientApp(subject uuid.UUID, owner, name, domain, perms string, hasPerms, public, sso, active bool) error {
-	log.Println(hasPerms, perms)
 	_, err := t.tx.Exec(`UPDATE client_store SET name = ?, domain = ?, perms = CASE WHEN ? = true THEN ? ELSE perms END, public = ?, sso = ?, active = ? WHERE subject = ? AND owner = ?`, name, domain, hasPerms, perms, public, sso, active, subject.String(), owner)
 	return err
 }

@@ -2,7 +2,7 @@ package server
 
 import (
 	"github.com/1f349/lavender/database"
-	"log"
+	"github.com/1f349/lavender/logger"
 	"net/http"
 )
 
@@ -20,13 +20,13 @@ func (h *HttpServer) DbTx(rw http.ResponseWriter, action func(tx *database.Tx) e
 	err = action(tx)
 	if err != nil {
 		http.Error(rw, "Database error", http.StatusInternalServerError)
-		log.Println("Database action error:", err)
+		logger.Logger.Warn("Database action error", "er", err)
 		return true
 	}
 	err = tx.Commit()
 	if err != nil {
 		http.Error(rw, "Database error", http.StatusInternalServerError)
-		log.Println("Database commit error:", err)
+		logger.Logger.Warn("Database commit error", "err", err)
 	}
 
 	return false
