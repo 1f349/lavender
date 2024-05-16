@@ -2,8 +2,6 @@ package server
 
 import (
 	"github.com/1f349/lavender/database"
-	"github.com/1f349/mjwt"
-	"github.com/1f349/mjwt/auth"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"net/url"
@@ -13,18 +11,18 @@ import (
 type UserHandler func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth)
 
 type UserAuth struct {
-	ID          string
+	Subject     string
 	DisplayName string
 	UserInfo    UserInfoFields
 }
 
-func (u UserAuth) IsGuest() bool { return u.ID == "" }
+func (u UserAuth) IsGuest() bool { return u.Subject == "" }
 
 func (h *HttpServer) RequireAdminAuthentication(next UserHandler) httprouter.Handle {
 	return h.RequireAuthentication(func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
 		var roles string
 		if h.DbTx(rw, func(tx *database.Tx) (err error) {
-			roles, err = tx.GetUserRoles(auth.ID)
+			roles, err = tx.GetUserRoles(auth.Subject)
 			return
 		}) {
 			return
@@ -50,29 +48,23 @@ func (h *HttpServer) RequireAuthentication(next UserHandler) httprouter.Handle {
 
 func (h *HttpServer) OptionalAuthentication(next UserHandler) httprouter.Handle {
 	return func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		auth, err := h.internalAuthenticationHandler(req)
+		authUser, err := h.internalAuthenticationHandler(req)
 		if err != nil {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if auth.IsGuest() {
-			// if this fails internally it just sees the user as logged out
-			h.readLoginDataCookie(req, &auth)
-		}
-		next(rw, req, params, auth)
+		next(rw, req, params, authUser)
 	}
 }
 
 func (h *HttpServer) internalAuthenticationHandler(req *http.Request) (UserAuth, error) {
-	if loginCookie, err := req.Cookie("lavender-login-data"); err == nil {
-		_, b, err := mjwt.ExtractClaims[auth.AccessTokenClaims](h.signingKey, loginCookie.Value)
-		if err != nil {
-			return UserAuth{}, err
-		}
-		return UserAuth{ID: b.Subject}, nil
+	var u UserAuth
+	err := h.readLoginDataCookie(req, &u)
+	if err != nil {
+		// not logged in
+		return UserAuth{}, nil
 	}
-	// not logged in
-	return UserAuth{}, nil
+	return u, nil
 }
 
 func PrepareRedirectUrl(targetPath string, origin *url.URL) *url.URL {

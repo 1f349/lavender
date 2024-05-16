@@ -30,7 +30,7 @@ func (h *HttpServer) Home(rw http.ResponseWriter, _ *http.Request, _ httprouter.
 
 	var isAdmin bool
 	h.DbTx(rw, func(tx *database.Tx) (err error) {
-		roles, err := tx.GetUserRoles(auth.ID)
+		roles, err := tx.GetUserRoles(auth.Subject)
 		isAdmin = HasRole(roles, "lavender:admin")
 		return err
 	})
@@ -38,8 +38,6 @@ func (h *HttpServer) Home(rw http.ResponseWriter, _ *http.Request, _ httprouter.
 	pages.RenderPageTemplate(rw, "index", map[string]any{
 		"ServiceName": h.conf.ServiceName,
 		"Auth":        auth,
-		"Subject":     auth.ID,
-		"DisplayName": auth.DisplayName,
 		"Nonce":       lNonce,
 		"IsAdmin":     isAdmin,
 	})

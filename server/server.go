@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"github.com/1f349/cache"
@@ -10,8 +9,8 @@ import (
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/logger"
 	"github.com/1f349/lavender/openid"
+	"github.com/1f349/lavender/pages"
 	scope2 "github.com/1f349/lavender/scope"
-	"github.com/1f349/lavender/theme"
 	"github.com/1f349/mjwt"
 	"github.com/go-oauth2/oauth2/v4/errors"
 	"github.com/go-oauth2/oauth2/v4/manage"
@@ -20,6 +19,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 )
@@ -44,6 +44,7 @@ type flowStateData struct {
 
 func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Server {
 	r := httprouter.New()
+	contentCache := time.Now()
 
 	// remove last slash from baseUrl
 	{
@@ -139,8 +140,14 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 	}))
 
 	// theme styles
-	r.GET("/theme/style.css", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		http.ServeContent(rw, req, "style.css", time.Now(), bytes.NewReader(theme.DefaultThemeCss))
+	r.GET("/assets/*filepath", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		name := params.ByName("filepath")
+		if strings.Contains(name, "..") {
+			http.Error(rw, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+		out := pages.RenderCss(path.Join("assets", name))
+		http.ServeContent(rw, req, path.Base(name), contentCache, out)
 	})
 
 	// management pages

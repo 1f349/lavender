@@ -147,5 +147,5 @@ func (h *HttpServer) oauthUserAuthorization(rw http.ResponseWriter, req *http.Re
 		http.Redirect(rw, req, redirectUrl.String(), http.StatusFound)
 		return "", nil
 	}
-	return auth.ID, nil
+	return auth.Subject, nil
 }

@@ -2,17 +2,14 @@ package server
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/pages"
+	"github.com/1f349/mjwt"
 	"github.com/1f349/mjwt/auth"
 	"github.com/1f349/mjwt/claims"
 	"github.com/golang-jwt/jwt/v4"
@@ -112,7 +109,7 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 	}
 
 	sessionData, err := h.fetchUserInfo(flowState.sso, token)
-	if sessionData.ID == "" {
+	if err != nil || sessionData.Subject == "" {
 		http.Error(rw, "Failed to fetch user info", http.StatusInternalServerError)
 		return
 	}
@@ -122,15 +119,15 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 		if err != nil {
 			return err
 		}
-		_, err = tx.GetUser(sessionData.ID)
+		_, err = tx.GetUser(sessionData.Subject)
 		if errors.Is(err, sql.ErrNoRows) {
 			uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
 			uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
-			return tx.InsertUser(sessionData.ID, uEmail, uEmailVerified, "", string(jBytes), true)
+			return tx.InsertUser(sessionData.Subject, uEmail, uEmailVerified, "", string(jBytes), true)
 		}
 		uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
 		uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
-		return tx.UpdateUserInfo(sessionData.ID, uEmail, uEmailVerified, string(jBytes))
+		return tx.UpdateUserInfo(sessionData.Subject, uEmail, uEmailVerified, string(jBytes))
 	}) {
 		return
 	}
@@ -139,7 +136,7 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 	auth = sessionData
 
 	if h.DbTx(rw, func(tx *database.Tx) error {
-		return tx.UpdateUserToken(auth.ID, token.AccessToken, token.RefreshToken, token.Expiry)
+		return tx.UpdateUserToken(auth.Subject, token.AccessToken, token.RefreshToken, token.Expiry)
 	}) {
 		return
 	}
@@ -156,9 +153,21 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 
 const oneYear = 365 * 24 * time.Hour
 
+type lavenderLoginData struct {
+	UserInfo UserInfoFields `json:"user_info"`
+	auth.AccessTokenClaims
+}
+
+func (l lavenderLoginData) Valid() error { return nil }
+
+func (l lavenderLoginData) Type() string { return "lavender-login-data" }
+
 func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAuth) bool {
 	ps := claims.NewPermStorage()
-	gen, err := h.signingKey.GenerateJwt(authData.ID, uuid.NewString(), jwt.ClaimStrings{h.conf.BaseUrl}, oneYear, auth.AccessTokenClaims{Perms: ps})
+	gen, err := h.signingKey.GenerateJwt(authData.Subject, uuid.NewString(), jwt.ClaimStrings{h.conf.BaseUrl}, oneYear, lavenderLoginData{
+		UserInfo:          authData.UserInfo,
+		AccessTokenClaims: auth.AccessTokenClaims{Perms: ps},
+	})
 	if err != nil {
 		http.Error(rw, "Failed to generate cookie token", http.StatusInternalServerError)
 		return true
@@ -174,34 +183,20 @@ func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAut
 	return false
 }
 
-func (h *HttpServer) readLoginDataCookie(req *http.Request, u *UserAuth) {
+func (h *HttpServer) readLoginDataCookie(req *http.Request, u *UserAuth) error {
 	loginCookie, err := req.Cookie("lavender-login-data")
 	if err != nil {
-		return
+		return err
 	}
-	hexData, err := hex.DecodeString(loginCookie.Value)
+	_, b, err := mjwt.ExtractClaims[lavenderLoginData](h.signingKey, loginCookie.Value)
 	if err != nil {
-		return
+		return err
 	}
-	decData, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, h.signingKey.PrivateKey(), hexData, []byte("lavender-login-data"))
-	if err != nil {
-		return
+	*u = UserAuth{
+		Subject:  b.Subject,
+		UserInfo: b.Claims.UserInfo,
 	}
-
-	userId := string(decData)
-	var token oauth2.Token
-	if h.DbTxRaw(func(tx *database.Tx) error {
-		return tx.GetUserToken(userId, &token.AccessToken, &token.RefreshToken, &token.Expiry)
-	}) {
-		return
-	}
-
-	sso := h.manager.FindServiceFromLogin(userId)
-	if sso == nil {
-		return
-	}
-
-	*u, _ = h.fetchUserInfo(sso, &token)
+	return nil
 }
 
 func (h *HttpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (UserAuth, error) {
@@ -221,10 +216,8 @@ func (h *HttpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Toke
 	}
 	subject += "@" + sso.Config.Namespace
 
-	displayName := userInfoJson.GetStringOrDefault("name", "Unknown Name")
 	return UserAuth{
-		ID:          subject,
-		DisplayName: displayName,
-		UserInfo:    userInfoJson,
+		Subject:  subject,
+		UserInfo: userInfoJson,
 	}, nil
 }

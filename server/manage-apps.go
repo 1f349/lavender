@@ -26,11 +26,11 @@ func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ 
 	var roles string
 	var appList []database.ClientInfoDbOutput
 	if h.DbTx(rw, func(tx *database.Tx) (err error) {
-		roles, err = tx.GetUserRoles(auth.ID)
+		roles, err = tx.GetUserRoles(auth.Subject)
 		if err != nil {
 			return
 		}
-		appList, err = tx.GetAppList(auth.ID, HasRole(roles, "lavender:admin"), offset)
+		appList, err = tx.GetAppList(auth.Subject, HasRole(roles, "lavender:admin"), offset)
 		return
 	}) {
 		return
@@ -80,7 +80,7 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 	if sso || hasPerms {
 		var roles string
 		if h.DbTx(rw, func(tx *database.Tx) (err error) {
-			roles, err = tx.GetUserRoles(auth.ID)
+			roles, err = tx.GetUserRoles(auth.Subject)
 			return
 		}) {
 			return
@@ -98,7 +98,7 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 	switch action {
 	case "create":
 		if h.DbTx(rw, func(tx *database.Tx) error {
-			return tx.InsertClientApp(name, domain, auth.ID, perms, public, sso, active)
+			return tx.InsertClientApp(name, domain, auth.Subject, perms, public, sso, active)
 		}) {
 			return
 		}
@@ -108,7 +108,7 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 			if err != nil {
 				return err
 			}
-			return tx.UpdateClientApp(sub, auth.ID, name, domain, perms, hasPerms, public, sso, active)
+			return tx.UpdateClientApp(sub, auth.Subject, name, domain, perms, hasPerms, public, sso, active)
 		}) {
 			return
 		}
@@ -124,7 +124,7 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 			if err != nil {
 				return err
 			}
-			secret, err = tx.ResetClientAppSecret(sub, auth.ID)
+			secret, err = tx.ResetClientAppSecret(sub, auth.Subject)
 			return err
 		}) {
 			return

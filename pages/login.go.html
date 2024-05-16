@@ -2,12 +2,11 @@
 <html lang="en">
 <head>
     <title>{{.ServiceName}}</title>
-    <link rel="stylesheet" href="/theme/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
-<header>
-    <h1>{{.ServiceName}}</h1>
-</header>
+{{template "header.go.html" .}}
 <main>
     <form method="POST" action="/login">
         <input type="hidden" name="redirect" value="{{.Redirect}}"/>

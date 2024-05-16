@@ -2,3 +2,5 @@
 *.local
 .idea/
 .data/
+node_modules/
+pages/style-minify.css
