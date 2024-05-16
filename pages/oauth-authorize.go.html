@@ -9,7 +9,7 @@
 {{template "header.go.html" .}}
 <main>
     <form method="POST" action="/authorize">
-        <div>The application {{.AppName}} wants to access your account ({{.DisplayName}}). It requests the following permissions:</div>
+        <div>The application {{.AppName}} wants to access your account ({{.Auth.UserInfo.name}}). It requests the following permissions:</div>
         <div>
             <ul>
                 {{range .WantsList}}

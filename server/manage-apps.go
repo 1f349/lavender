@@ -46,16 +46,18 @@ func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ 
 	}
 	if q.Has("edit") {
 		for _, i := range appList {
-			if i.Sub == q.Get("edit") {
-				m["Edit"] = i
-				goto validEdit
+			if i.Subject == q.Get("edit") {
+				m["EditApp"] = i
+				rw.Header().Set("Content-Type", "text/html")
+				rw.WriteHeader(http.StatusOK)
+				pages.RenderPageTemplate(rw, "manage-apps-edit", m)
+				return
 			}
 		}
 		http.Error(rw, "400 Bad Request: Invalid client app to edit", http.StatusBadRequest)
 		return
 	}
 
-validEdit:
 	rw.Header().Set("Content-Type", "text/html")
 	rw.WriteHeader(http.StatusOK)
 	pages.RenderPageTemplate(rw, "manage-apps", m)

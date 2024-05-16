@@ -57,7 +57,7 @@ func (t *Tx) GetUser(sub string) (*User, error) {
 	var u User
 	row := t.tx.QueryRow(`SELECT email, email_verified, roles, userinfo, updated_at, active FROM users WHERE subject = ?`, sub)
 	err := row.Scan(&u.Email, &u.EmailVerified, &u.Roles, &u.UserInfo, &u.UpdatedAt, &u.Active)
-	u.Sub = sub
+	u.Subject = sub
 	return &u, err
 }
 
@@ -71,7 +71,7 @@ func (t *Tx) GetUserEmail(sub string) (string, error) {
 func (t *Tx) GetClientInfo(sub string) (oauth2.ClientInfo, error) {
 	var u ClientInfoDbOutput
 	row := t.tx.QueryRow(`SELECT secret, name, domain, perms, public, sso, active FROM client_store WHERE subject = ? LIMIT 1`, sub)
-	err := row.Scan(&u.Secret, &u.Name, &u.Domain, &u.Perms, &u.Public, &u.SSO, &u.Active)
+	err := row.Scan(&u.Secret, &u.Name, &u.Domain, &u.Perms, &u.Public, &u.Sso, &u.Active)
 	u.Owner = sub
 	if !u.Active {
 		return nil, fmt.Errorf("client is not active")
@@ -88,7 +88,7 @@ func (t *Tx) GetAppList(owner string, admin bool, offset int) ([]ClientInfoDbOut
 	defer row.Close()
 	for row.Next() {
 		var a ClientInfoDbOutput
-		err := row.Scan(&a.Sub, &a.Name, &a.Domain, &a.Owner, &a.Perms, &a.Public, &a.SSO, &a.Active)
+		err := row.Scan(&a.Subject, &a.Name, &a.Domain, &a.Owner, &a.Perms, &a.Public, &a.Sso, &a.Active)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +129,7 @@ func (t *Tx) GetUserList(offset int) ([]User, error) {
 	}
 	for row.Next() {
 		var a User
-		err := row.Scan(&a.Sub, &a.Email, &a.EmailVerified, &a.Roles, &a.UpdatedAt, &a.Active)
+		err := row.Scan(&a.Subject, &a.Email, &a.EmailVerified, &a.Roles, &a.UpdatedAt, &a.Active)
 		if err != nil {
 			return nil, err
 		}

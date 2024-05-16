@@ -47,16 +47,18 @@ func (h *HttpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _
 	}
 	if q.Has("edit") {
 		for _, i := range userList {
-			if i.Sub == q.Get("edit") {
-				m["Edit"] = i
-				goto validEdit
+			if i.Subject == q.Get("edit") {
+				m["EditUser"] = i
+				rw.Header().Set("Content-Type", "text/html")
+				rw.WriteHeader(http.StatusOK)
+				pages.RenderPageTemplate(rw, "manage-users-edit", m)
+				return
 			}
 		}
 		http.Error(rw, "400 Bad Request: Invalid user to edit", http.StatusBadRequest)
 		return
 	}
 
-validEdit:
 	rw.Header().Set("Content-Type", "text/html")
 	rw.WriteHeader(http.StatusOK)
 	pages.RenderPageTemplate(rw, "manage-users", m)

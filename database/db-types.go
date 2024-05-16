@@ -6,7 +6,7 @@ import (
 )
 
 type User struct {
-	Sub           string    `json:"sub"`
+	Subject       string    `json:"subject"`
 	Email         string    `json:"email"`
 	EmailVerified bool      `json:"email_verified"`
 	Roles         string    `json:"roles"`
@@ -16,13 +16,13 @@ type User struct {
 }
 
 type ClientInfoDbOutput struct {
-	Sub, Name, Secret, Domain, Owner, Perms string
-	Public, SSO, Active                     bool
+	Subject, Name, Secret, Domain, Owner, Perms string
+	Public, Sso, Active                         bool
 }
 
 var _ oauth2.ClientInfo = &ClientInfoDbOutput{}
 
-func (c *ClientInfoDbOutput) GetID() string     { return c.Sub }
+func (c *ClientInfoDbOutput) GetID() string     { return c.Subject }
 func (c *ClientInfoDbOutput) GetSecret() string { return c.Secret }
 func (c *ClientInfoDbOutput) GetDomain() string { return c.Domain }
 func (c *ClientInfoDbOutput) IsPublic() bool    { return c.Public }
@@ -34,7 +34,7 @@ func (c *ClientInfoDbOutput) GetName() string { return c.Name }
 
 // IsSSO is an extra field for the oauth handler to skip the user input stage
 // this is for trusted applications to get permissions without asking the user
-func (c *ClientInfoDbOutput) IsSSO() bool { return c.SSO }
+func (c *ClientInfoDbOutput) IsSSO() bool { return c.Sso }
 
 // IsActive is an extra field for the app manager to get the active state
 func (c *ClientInfoDbOutput) IsActive() bool { return c.Active }
