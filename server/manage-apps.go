@@ -63,6 +63,25 @@ func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ 
 	pages.RenderPageTemplate(rw, "manage-apps", m)
 }
 
+func (h *HttpServer) ManageAppsCreateGet(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params, auth UserAuth) {
+	var roles string
+	if h.DbTx(rw, func(tx *database.Tx) (err error) {
+		roles, err = tx.GetUserRoles(auth.Subject)
+		return
+	}) {
+		return
+	}
+
+	m := map[string]any{
+		"ServiceName": h.conf.ServiceName,
+		"IsAdmin":     HasRole(roles, "lavender:admin"),
+	}
+
+	rw.Header().Set("Content-Type", "text/html")
+	rw.WriteHeader(http.StatusOK)
+	pages.RenderPageTemplate(rw, "manage-apps-create", m)
+}
+
 func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	err := req.ParseForm()
 	if err != nil {

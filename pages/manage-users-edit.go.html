@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{{.ServiceName}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+{{template "header.go.html" .}}
+<main>
+    <form method="GET" action="/">
+        <button type="submit">Home</button>
+    </form>
+
+    <h2>Edit User</h2>
+    <form method="POST" action="/manage/users">
+        <input type="hidden" name="action" value="edit"/>
+        <input type="hidden" name="offset" value="{{.Offset}}"/>
+        <div>
+            <label for="field_subject">Subject:</label>
+            <input type="text" name="subject" id="field_subject" value="{{.EditUser.Subject}}" required/>
+        </div>
+        <div>
+            <label for="field_roles">Roles:</label>
+            <input type="text" name="roles" id="field_roles" value="{{.EditUser.Roles}}" size="100"/>
+        </div>
+        <div>
+            <label for="field_active">Active: <input type="checkbox" name="active" id="field_active" checked/></label>
+        </div>
+        <button type="submit">Edit</button>
+    </form>
+    <form method="GET" action="/manage/users">
+        <input type="hidden" name="offset" value="{{.Offset}}"/>
+        <button type="submit">Cancel</button>
+    </form>
+</main>
+</body>
+</html>

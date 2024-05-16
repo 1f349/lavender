@@ -152,6 +152,7 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 
 	// management pages
 	r.GET("/manage/apps", hs.RequireAuthentication(hs.ManageAppsGet))
+	r.GET("/manage/apps/create", hs.RequireAuthentication(hs.ManageAppsCreateGet))
 	r.POST("/manage/apps", hs.RequireAuthentication(hs.ManageAppsPost))
 	r.GET("/manage/users", hs.RequireAdminAuthentication(hs.ManageUsersGet))
 	r.POST("/manage/users", hs.RequireAdminAuthentication(hs.ManageUsersPost))
