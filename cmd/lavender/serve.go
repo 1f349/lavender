@@ -9,7 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"flag"
-	"github.com/1f349/lavender/database"
+	"github.com/1f349/lavender"
 	"github.com/1f349/lavender/logger"
 	"github.com/1f349/lavender/pages"
 	"github.com/1f349/lavender/server"
@@ -75,7 +75,7 @@ func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{})
 	}
 	saveMjwtPubKey(signingKey, wd)
 
-	db, err := database.Open(filepath.Join(wd, "lavender.db.sqlite"))
+	db, err := lavender.InitDB(filepath.Join(wd, "lavender.db.sqlite"))
 	if err != nil {
 		logger.Logger.Fatal("Failed to open database:", err)
 	}

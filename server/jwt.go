@@ -16,25 +16,20 @@ import (
 
 type JWTAccessGenerate struct {
 	signer mjwt.Signer
-	db     *database.DB
+	db     *database.Queries
 }
 
-func NewJWTAccessGenerate(signer mjwt.Signer, db *database.DB) *JWTAccessGenerate {
+func NewJWTAccessGenerate(signer mjwt.Signer, db *database.Queries) *JWTAccessGenerate {
 	return &JWTAccessGenerate{signer, db}
 }
 
 var _ oauth2.AccessGenerate = &JWTAccessGenerate{}
 
 func (j *JWTAccessGenerate) Token(ctx context.Context, data *oauth2.GenerateBasic, isGenRefresh bool) (access, refresh string, err error) {
-	beginCtx, err := j.db.BeginCtx(ctx)
+	roles, err := j.db.GetUserRoles(ctx, data.UserID)
 	if err != nil {
 		return "", "", err
 	}
-	roles, err := beginCtx.GetUserRoles(data.UserID)
-	if err != nil {
-		return "", "", err
-	}
-	beginCtx.Rollback()
 
 	ps := claims.ParsePermStorage(roles)
 	out := claims.NewPermStorage()

@@ -114,20 +114,33 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 		return
 	}
 
-	if h.DbTx(rw, func(tx *database.Tx) error {
+	if h.DbTx(rw, func(tx *database.Queries) error {
 		jBytes, err := json.Marshal(sessionData.UserInfo)
 		if err != nil {
 			return err
 		}
-		_, err = tx.GetUser(sessionData.Subject)
+		_, err = tx.GetUser(req.Context(), sessionData.Subject)
 		if errors.Is(err, sql.ErrNoRows) {
 			uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
 			uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
-			return tx.InsertUser(sessionData.Subject, uEmail, uEmailVerified, "", string(jBytes), true)
+			return tx.AddUser(req.Context(), database.AddUserParams{
+				Subject:       sessionData.Subject,
+				Email:         uEmail,
+				EmailVerified: uEmailVerified,
+				Roles:         "",
+				Userinfo:      string(jBytes),
+				UpdatedAt:     time.Now(),
+				Active:        true,
+			})
 		}
 		uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
 		uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
-		return tx.UpdateUserInfo(sessionData.Subject, uEmail, uEmailVerified, string(jBytes))
+		return tx.UpdateUserInfo(req.Context(), database.UpdateUserInfoParams{
+			Email:         sessionData.Subject,
+			EmailVerified: uEmailVerified,
+			Userinfo:      string(jBytes),
+			Subject:       uEmail,
+		})
 	}) {
 		return
 	}
@@ -135,8 +148,13 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 	// only continues if the above tx succeeds
 	auth = sessionData
 
-	if h.DbTx(rw, func(tx *database.Tx) error {
-		return tx.UpdateUserToken(auth.Subject, token.AccessToken, token.RefreshToken, token.Expiry)
+	if h.DbTx(rw, func(tx *database.Queries) error {
+		return tx.UpdateUserToken(req.Context(), database.UpdateUserTokenParams{
+			AccessToken:  token.AccessToken,
+			RefreshToken: token.RefreshToken,
+			Expiry:       token.Expiry,
+			Subject:      auth.Subject,
+		})
 	}) {
 		return
 	}

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func (h *HttpServer) Home(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *HttpServer) Home(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	rw.Header().Set("Content-Type", "text/html")
 	lNonce := uuid.NewString()
 	http.SetCookie(rw, &http.Cookie{
@@ -29,8 +29,8 @@ func (h *HttpServer) Home(rw http.ResponseWriter, _ *http.Request, _ httprouter.
 	}
 
 	var isAdmin bool
-	h.DbTx(rw, func(tx *database.Tx) (err error) {
-		roles, err := tx.GetUserRoles(auth.Subject)
+	h.DbTx(rw, func(tx *database.Queries) (err error) {
+		roles, err := tx.GetUserRoles(req.Context(), auth.Subject)
 		isAdmin = HasRole(roles, "lavender:admin")
 		return err
 	})

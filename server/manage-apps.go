@@ -3,7 +3,7 @@ package server
 import (
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/pages"
-	"github.com/go-oauth2/oauth2/v4"
+	"github.com/1f349/lavender/password"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
@@ -24,13 +24,17 @@ func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ 
 	}
 
 	var roles string
-	var appList []database.ClientInfoDbOutput
-	if h.DbTx(rw, func(tx *database.Tx) (err error) {
-		roles, err = tx.GetUserRoles(auth.Subject)
+	var appList []database.GetAppListRow
+	if h.DbTx(rw, func(tx *database.Queries) (err error) {
+		roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
 		if err != nil {
 			return
 		}
-		appList, err = tx.GetAppList(auth.Subject, HasRole(roles, "lavender:admin"), offset)
+		appList, err = tx.GetAppList(req.Context(), database.GetAppListParams{
+			Owner:   auth.Subject,
+			Column2: HasRole(roles, "lavender:admin"),
+			Offset:  int64(offset),
+		})
 		return
 	}) {
 		return
@@ -63,10 +67,10 @@ func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ 
 	pages.RenderPageTemplate(rw, "manage-apps", m)
 }
 
-func (h *HttpServer) ManageAppsCreateGet(rw http.ResponseWriter, _ *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *HttpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	var roles string
-	if h.DbTx(rw, func(tx *database.Tx) (err error) {
-		roles, err = tx.GetUserRoles(auth.Subject)
+	if h.DbTx(rw, func(tx *database.Queries) (err error) {
+		roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
 		return
 	}) {
 		return
@@ -100,8 +104,8 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 
 	if sso || hasPerms {
 		var roles string
-		if h.DbTx(rw, func(tx *database.Tx) (err error) {
-			roles, err = tx.GetUserRoles(auth.Subject)
+		if h.DbTx(rw, func(tx *database.Queries) (err error) {
+			roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
 			return
 		}) {
 			return
@@ -118,43 +122,64 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 
 	switch action {
 	case "create":
-		if h.DbTx(rw, func(tx *database.Tx) error {
-			return tx.InsertClientApp(name, domain, auth.Subject, perms, public, sso, active)
+		if h.DbTx(rw, func(tx *database.Queries) error {
+			secret, err := password.GenerateApiSecret(70)
+			if err != nil {
+				return err
+			}
+			return tx.InsertClientApp(req.Context(), database.InsertClientAppParams{
+				Subject: uuid.NewString(),
+				Name:    name,
+				Secret:  secret,
+				Domain:  domain,
+				Owner:   auth.Subject,
+				Perms:   perms,
+				Public:  public,
+				Sso:     sso,
+				Active:  active,
+			})
 		}) {
 			return
 		}
 	case "edit":
-		if h.DbTx(rw, func(tx *database.Tx) error {
-			sub, err := uuid.Parse(req.Form.Get("subject"))
-			if err != nil {
-				return err
-			}
-			return tx.UpdateClientApp(sub, auth.Subject, name, domain, perms, hasPerms, public, sso, active)
+		if h.DbTx(rw, func(tx *database.Queries) error {
+			return tx.UpdateClientApp(req.Context(), database.UpdateClientAppParams{
+				Name:    name,
+				Domain:  domain,
+				Column3: hasPerms,
+				Public:  public,
+				Sso:     sso,
+				Active:  active,
+				Subject: req.FormValue("subject"),
+				Owner:   auth.Subject,
+			})
 		}) {
 			return
 		}
 	case "secret":
-		var info oauth2.ClientInfo
+		var info database.ClientStore
 		var secret string
-		if h.DbTx(rw, func(tx *database.Tx) error {
-			sub, err := uuid.Parse(req.Form.Get("subject"))
+		if h.DbTx(rw, func(tx *database.Queries) error {
+			sub := req.Form.Get("subject")
+			info, err = tx.GetClientInfo(req.Context(), sub)
 			if err != nil {
 				return err
 			}
-			info, err = tx.GetClientInfo(sub.String())
+			secret, err := password.GenerateApiSecret(70)
 			if err != nil {
 				return err
 			}
-			secret, err = tx.ResetClientAppSecret(sub, auth.Subject)
+			err = tx.ResetClientAppSecret(req.Context(), database.ResetClientAppSecretParams{
+				Secret:  secret,
+				Subject: sub,
+				Owner:   auth.Subject,
+			})
 			return err
 		}) {
 			return
 		}
 
-		appName := "Unknown..."
-		if getName, ok := info.(interface{ GetName() string }); ok {
-			appName = getName.GetName()
-		}
+		appName := info.GetName()
 
 		h.ManageAppsGet(rw, &http.Request{
 			URL: &url.URL{

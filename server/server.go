@@ -30,7 +30,7 @@ type HttpServer struct {
 	r          *httprouter.Router
 	oauthSrv   *server.Server
 	oauthMgr   *manage.Manager
-	db         *database.DB
+	db         *database.Queries
 	conf       Conf
 	signingKey mjwt.Signer
 	manager    *issuer.Manager
@@ -42,7 +42,7 @@ type flowStateData struct {
 	redirect string
 }
 
-func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Server {
+func NewHttpServer(conf Conf, db *database.Queries, signingKey mjwt.Signer) *http.Server {
 	r := httprouter.New()
 	contentCache := time.Now()
 
@@ -187,16 +187,16 @@ func NewHttpServer(conf Conf, db *database.DB, signingKey mjwt.Signer) *http.Ser
 			return
 		}
 
-		var user *database.User
-		if hs.DbTx(rw, func(tx *database.Tx) (err error) {
-			user, err = tx.GetUser(userId)
-			return err
+		var user database.User
+		if hs.DbTx(rw, func(tx *database.Queries) (err error) {
+			user, err = tx.GetUser(req.Context(), userId)
+			return
 		}) {
 			return
 		}
 
 		var userInfo UserInfoFields
-		err = json.Unmarshal([]byte(user.UserInfo), &userInfo)
+		err = json.Unmarshal([]byte(user.Userinfo), &userInfo)
 		if err != nil {
 			http.Error(rw, "500 Internal Server Error", http.StatusInternalServerError)
 			return

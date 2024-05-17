@@ -21,8 +21,8 @@ func (u UserAuth) IsGuest() bool { return u.Subject == "" }
 func (h *HttpServer) RequireAdminAuthentication(next UserHandler) httprouter.Handle {
 	return h.RequireAuthentication(func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
 		var roles string
-		if h.DbTx(rw, func(tx *database.Tx) (err error) {
-			roles, err = tx.GetUserRoles(auth.Subject)
+		if h.DbTx(rw, func(tx *database.Queries) (err error) {
+			roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
 			return
 		}) {
 			return

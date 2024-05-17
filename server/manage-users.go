@@ -22,13 +22,13 @@ func (h *HttpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _
 	}
 
 	var roles string
-	var userList []database.User
-	if h.DbTx(rw, func(tx *database.Tx) (err error) {
-		roles, err = tx.GetUserRoles(auth.Subject)
+	var userList []database.GetUserListRow
+	if h.DbTx(rw, func(tx *database.Queries) (err error) {
+		roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
 		if err != nil {
 			return
 		}
-		userList, err = tx.GetUserList(offset)
+		userList, err = tx.GetUserList(req.Context(), int64(offset))
 		return
 	}) {
 		return
@@ -72,8 +72,8 @@ func (h *HttpServer) ManageUsersPost(rw http.ResponseWriter, req *http.Request, 
 	}
 
 	var roles string
-	if h.DbTx(rw, func(tx *database.Tx) (err error) {
-		roles, err = tx.GetUserRoles(auth.Subject)
+	if h.DbTx(rw, func(tx *database.Queries) (err error) {
+		roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
 		return
 	}) {
 		return
@@ -90,9 +90,13 @@ func (h *HttpServer) ManageUsersPost(rw http.ResponseWriter, req *http.Request, 
 
 	switch action {
 	case "edit":
-		if h.DbTx(rw, func(tx *database.Tx) error {
+		if h.DbTx(rw, func(tx *database.Queries) error {
 			sub := req.Form.Get("subject")
-			return tx.UpdateUser(sub, newRoles, active)
+			return tx.UpdateUser(req.Context(), database.UpdateUserParams{
+				Active:  active,
+				Roles:   newRoles,
+				Subject: sub,
+			})
 		}) {
 			return
 		}
