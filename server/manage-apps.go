@@ -147,6 +147,7 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 				Name:    name,
 				Domain:  domain,
 				Column3: hasPerms,
+				Perms:   perms,
 				Public:  public,
 				Sso:     sso,
 				Active:  active,
