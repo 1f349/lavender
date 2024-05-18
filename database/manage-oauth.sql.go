@@ -10,7 +10,7 @@ import (
 )
 
 const getAppList = `-- name: GetAppList :many
-SELECT subject, name, domain, owner, public, sso, active
+SELECT subject, name, domain, owner, perms, public, sso, active
 FROM client_store
 WHERE owner = ?
    OR ? = 1
@@ -28,6 +28,7 @@ type GetAppListRow struct {
 	Name    string `json:"name"`
 	Domain  string `json:"domain"`
 	Owner   string `json:"owner"`
+	Perms   string `json:"perms"`
 	Public  bool   `json:"public"`
 	Sso     bool   `json:"sso"`
 	Active  bool   `json:"active"`
@@ -47,6 +48,7 @@ func (q *Queries) GetAppList(ctx context.Context, arg GetAppListParams) ([]GetAp
 			&i.Name,
 			&i.Domain,
 			&i.Owner,
+			&i.Perms,
 			&i.Public,
 			&i.Sso,
 			&i.Active,

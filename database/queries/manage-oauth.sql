@@ -5,7 +5,7 @@ WHERE subject = ?
 LIMIT 1;
 
 -- name: GetAppList :many
-SELECT subject, name, domain, owner, public, sso, active
+SELECT subject, name, domain, owner, perms, public, sso, active
 FROM client_store
 WHERE owner = ?
    OR ? = 1
