@@ -5,9 +5,9 @@ CREATE TABLE users
     email_verified BOOLEAN DEFAULT 0       NOT NULL,
     roles          TEXT                    NOT NULL,
     userinfo       TEXT                    NOT NULL,
-    access_token   TEXT                    NOT NULL,
-    refresh_token  TEXT                    NOT NULL,
-    expiry         DATETIME                NOT NULL,
+    access_token   TEXT,
+    refresh_token  TEXT,
+    expiry         DATETIME,
     updated_at     DATETIME                NOT NULL,
     active         BOOLEAN DEFAULT 1       NOT NULL
 );

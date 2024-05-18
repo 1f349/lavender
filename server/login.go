@@ -150,9 +150,9 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 
 	if h.DbTx(rw, func(tx *database.Queries) error {
 		return tx.UpdateUserToken(req.Context(), database.UpdateUserTokenParams{
-			AccessToken:  token.AccessToken,
-			RefreshToken: token.RefreshToken,
-			Expiry:       token.Expiry,
+			AccessToken:  sql.NullString{String: token.AccessToken, Valid: true},
+			RefreshToken: sql.NullString{String: token.RefreshToken, Valid: true},
+			Expiry:       sql.NullTime{Time: token.Expiry, Valid: true},
 			Subject:      auth.Subject,
 		})
 	}) {

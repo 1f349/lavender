@@ -5,6 +5,7 @@
 package database
 
 import (
+	"database/sql"
 	"time"
 )
 
@@ -21,14 +22,14 @@ type ClientStore struct {
 }
 
 type User struct {
-	Subject       string    `json:"subject"`
-	Email         string    `json:"email"`
-	EmailVerified bool      `json:"email_verified"`
-	Roles         string    `json:"roles"`
-	Userinfo      string    `json:"userinfo"`
-	AccessToken   string    `json:"access_token"`
-	RefreshToken  string    `json:"refresh_token"`
-	Expiry        time.Time `json:"expiry"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	Active        bool      `json:"active"`
+	Subject       string         `json:"subject"`
+	Email         string         `json:"email"`
+	EmailVerified bool           `json:"email_verified"`
+	Roles         string         `json:"roles"`
+	Userinfo      string         `json:"userinfo"`
+	AccessToken   sql.NullString `json:"access_token"`
+	RefreshToken  sql.NullString `json:"refresh_token"`
+	Expiry        sql.NullTime   `json:"expiry"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	Active        bool           `json:"active"`
 }

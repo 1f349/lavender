@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -97,9 +98,9 @@ LIMIT 1
 `
 
 type GetUserTokenRow struct {
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token"`
-	Expiry       time.Time `json:"expiry"`
+	AccessToken  sql.NullString `json:"access_token"`
+	RefreshToken sql.NullString `json:"refresh_token"`
+	Expiry       sql.NullTime   `json:"expiry"`
 }
 
 func (q *Queries) GetUserToken(ctx context.Context, subject string) (GetUserTokenRow, error) {
@@ -155,10 +156,10 @@ WHERE subject = ?
 `
 
 type UpdateUserTokenParams struct {
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token"`
-	Expiry       time.Time `json:"expiry"`
-	Subject      string    `json:"subject"`
+	AccessToken  sql.NullString `json:"access_token"`
+	RefreshToken sql.NullString `json:"refresh_token"`
+	Expiry       sql.NullTime   `json:"expiry"`
+	Subject      string         `json:"subject"`
 }
 
 func (q *Queries) UpdateUserToken(ctx context.Context, arg UpdateUserTokenParams) error {
