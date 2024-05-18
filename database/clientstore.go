@@ -20,3 +20,6 @@ func (c *ClientStore) IsSSO() bool { return c.Sso }
 
 // IsActive is an extra field for the app manager to get the active state
 func (c *ClientStore) IsActive() bool { return c.Active }
+
+// UsePerms is an extra field for the userinfo handler to return user permissions matching the requested values
+func (c *ClientStore) UsePerms() string { return c.Perms }
