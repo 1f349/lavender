@@ -38,8 +38,9 @@ type HttpServer struct {
 }
 
 type flowStateData struct {
-	sso      *issuer.WellKnownOIDC
-	redirect string
+	loginName string
+	sso       *issuer.WellKnownOIDC
+	redirect  string
 }
 
 func NewHttpServer(conf Conf, db *database.Queries, signingKey mjwt.Signer) *http.Server {
@@ -126,7 +127,14 @@ func NewHttpServer(conf Conf, db *database.Queries, signingKey mjwt.Signer) *htt
 		}
 		if subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(req.PostFormValue("nonce"))) == 1 {
 			http.SetCookie(rw, &http.Cookie{
-				Name:     "lavender-login-data",
+				Name:     "lavender-login-access",
+				Path:     "/",
+				MaxAge:   -1,
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+			})
+			http.SetCookie(rw, &http.Cookie{
+				Name:     "lavender-login-refresh",
 				Path:     "/",
 				MaxAge:   -1,
 				Secure:   true,

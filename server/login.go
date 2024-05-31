@@ -87,7 +87,7 @@ func (h *HttpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 
 	// save state for use later
 	state := login.Config.Namespace + ":" + uuid.NewString()
-	h.flowState.Set(state, flowStateData{login, req.PostFormValue("redirect")}, time.Now().Add(15*time.Minute))
+	h.flowState.Set(state, flowStateData{loginName, login, req.PostFormValue("redirect")}, time.Now().Add(15*time.Minute))
 
 	// generate oauth2 config and redirect to authorize URL
 	oa2conf := login.OAuth2Config
@@ -96,7 +96,7 @@ func (h *HttpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 	http.Redirect(rw, req, nextUrl, http.StatusFound)
 }
 
-func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, userAuth UserAuth) {
 	flowState, ok := h.flowState.Get(req.FormValue("state"))
 	if !ok {
 		http.Error(rw, "Invalid flow state", http.StatusBadRequest)
@@ -108,13 +108,29 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 		return
 	}
 
-	sessionData, err := h.fetchUserInfo(flowState.sso, token)
-	if err != nil || sessionData.Subject == "" {
-		http.Error(rw, "Failed to fetch user info", http.StatusInternalServerError)
+	userAuth, err = h.updateExternalUserInfo(req, flowState.sso, token)
+	if err != nil {
+		http.Error(rw, "Failed to update external user info", http.StatusInternalServerError)
 		return
 	}
 
-	if h.DbTx(rw, func(tx *database.Queries) error {
+	if h.setLoginDataCookie(rw, userAuth, flowState.loginName) {
+		http.Error(rw, "Failed to save login cookie", http.StatusInternalServerError)
+		return
+	}
+	if flowState.redirect != "" {
+		req.Form.Set("redirect", flowState.redirect)
+	}
+	h.SafeRedirect(rw, req)
+}
+
+func (h *HttpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (UserAuth, error) {
+	sessionData, err := h.fetchUserInfo(sso, token)
+	if err != nil || sessionData.Subject == "" {
+		return UserAuth{}, fmt.Errorf("failed to fetch user info")
+	}
+
+	err = h.DbTxError(func(tx *database.Queries) error {
 		jBytes, err := json.Marshal(sessionData.UserInfo)
 		if err != nil {
 			return err
@@ -141,48 +157,51 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 			Userinfo:      string(jBytes),
 			Subject:       uEmail,
 		})
-	}) {
-		return
+	})
+	if err != nil {
+		return UserAuth{}, err
 	}
 
 	// only continues if the above tx succeeds
-	auth = sessionData
-
-	if h.DbTx(rw, func(tx *database.Queries) error {
+	if err := h.DbTxError(func(tx *database.Queries) error {
 		return tx.UpdateUserToken(req.Context(), database.UpdateUserTokenParams{
 			AccessToken:  sql.NullString{String: token.AccessToken, Valid: true},
 			RefreshToken: sql.NullString{String: token.RefreshToken, Valid: true},
 			Expiry:       sql.NullTime{Time: token.Expiry, Valid: true},
-			Subject:      auth.Subject,
+			Subject:      sessionData.Subject,
 		})
-	}) {
-		return
+	}); err != nil {
+		return UserAuth{}, err
 	}
 
-	if h.setLoginDataCookie(rw, auth) {
-		http.Error(rw, "Failed to save login cookie", http.StatusInternalServerError)
-		return
-	}
-	if flowState.redirect != "" {
-		req.Form.Set("redirect", flowState.redirect)
-	}
-	h.SafeRedirect(rw, req)
+	return sessionData, nil
 }
 
-const oneYear = 365 * 24 * time.Hour
+const twelveHours = 12 * time.Hour
+const oneWeek = 7 * 24 * time.Hour
 
-type lavenderLoginData struct {
+type lavenderLoginAccess struct {
 	UserInfo UserInfoFields `json:"user_info"`
 	auth.AccessTokenClaims
 }
 
-func (l lavenderLoginData) Valid() error { return nil }
+func (l lavenderLoginAccess) Valid() error { return l.AccessTokenClaims.Valid() }
 
-func (l lavenderLoginData) Type() string { return "lavender-login-data" }
+func (l lavenderLoginAccess) Type() string { return "lavender-login-access" }
 
-func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAuth) bool {
+type lavenderLoginRefresh struct {
+	Login string `json:"login"`
+	auth.RefreshTokenClaims
+}
+
+func (l lavenderLoginRefresh) Valid() error { return l.RefreshTokenClaims.Valid() }
+
+func (l lavenderLoginRefresh) Type() string { return "lavender-login-refresh" }
+
+func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAuth, loginName string) bool {
 	ps := claims.NewPermStorage()
-	gen, err := h.signingKey.GenerateJwt(authData.Subject, uuid.NewString(), jwt.ClaimStrings{h.conf.BaseUrl}, oneYear, lavenderLoginData{
+	accId := uuid.NewString()
+	gen, err := h.signingKey.GenerateJwt(authData.Subject, accId, jwt.ClaimStrings{h.conf.BaseUrl}, twelveHours, lavenderLoginAccess{
 		UserInfo:          authData.UserInfo,
 		AccessTokenClaims: auth.AccessTokenClaims{Perms: ps},
 	})
@@ -190,29 +209,92 @@ func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAut
 		http.Error(rw, "Failed to generate cookie token", http.StatusInternalServerError)
 		return true
 	}
+	ref, err := h.signingKey.GenerateJwt(authData.Subject, uuid.NewString(), jwt.ClaimStrings{h.conf.BaseUrl}, oneWeek, lavenderLoginRefresh{
+		Login:              loginName,
+		RefreshTokenClaims: auth.RefreshTokenClaims{AccessTokenId: accId},
+	})
+	if err != nil {
+		http.Error(rw, "Failed to generate cookie token", http.StatusInternalServerError)
+		return true
+	}
 	http.SetCookie(rw, &http.Cookie{
-		Name:     "lavender-login-data",
+		Name:     "lavender-login-access",
 		Value:    gen,
 		Path:     "/",
-		Expires:  time.Now().AddDate(0, 3, 0),
 		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.SetCookie(rw, &http.Cookie{
+		Name:     "lavender-login-refresh",
+		Value:    ref,
+		Path:     "/",
+		Expires:  time.Now().AddDate(0, 0, 10),
+		Secure:   true,
+		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
 	return false
 }
 
-func (h *HttpServer) readLoginDataCookie(req *http.Request, u *UserAuth) error {
-	loginCookie, err := req.Cookie("lavender-login-data")
+func readJwtCookie[T mjwt.Claims](req *http.Request, cookieName string, signingKey mjwt.Verifier) (mjwt.BaseTypeClaims[T], error) {
+	loginCookie, err := req.Cookie(cookieName)
 	if err != nil {
-		return err
+		return mjwt.BaseTypeClaims[T]{}, err
 	}
-	_, b, err := mjwt.ExtractClaims[lavenderLoginData](h.signingKey, loginCookie.Value)
+	_, b, err := mjwt.ExtractClaims[T](signingKey, loginCookie.Value)
 	if err != nil {
-		return err
+		return mjwt.BaseTypeClaims[T]{}, err
+	}
+	return b, nil
+}
+
+func (h *HttpServer) readLoginAccessCookie(rw http.ResponseWriter, req *http.Request, u *UserAuth) error {
+	loginData, err := readJwtCookie[lavenderLoginAccess](req, "lavender-login-access", h.signingKey)
+	if err != nil {
+		return h.readLoginRefreshCookie(rw, req, u)
 	}
 	*u = UserAuth{
-		Subject:  b.Subject,
-		UserInfo: b.Claims.UserInfo,
+		Subject:  loginData.Subject,
+		UserInfo: loginData.Claims.UserInfo,
+	}
+	return nil
+}
+
+func (h *HttpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Request, userAuth *UserAuth) error {
+	refreshData, err := readJwtCookie[lavenderLoginRefresh](req, "lavender-login-refresh", h.signingKey)
+	if err != nil {
+		return err
+	}
+
+	sso := h.manager.FindServiceFromLogin(refreshData.Claims.Login)
+
+	var oauthToken *oauth2.Token
+
+	err = h.DbTxError(func(tx *database.Queries) error {
+		token, err := tx.GetUserToken(req.Context(), refreshData.Subject)
+		if err != nil {
+			return err
+		}
+		if !token.AccessToken.Valid || !token.RefreshToken.Valid || !token.Expiry.Valid {
+			return fmt.Errorf("invalid oauth token")
+		}
+		oauthToken = &oauth2.Token{
+			AccessToken:  token.AccessToken.String,
+			RefreshToken: token.RefreshToken.String,
+			Expiry:       token.Expiry.Time,
+		}
+		return nil
+	})
+
+	*userAuth, err = h.updateExternalUserInfo(req, sso, oauthToken)
+	if err != nil {
+		return err
+	}
+
+	if h.setLoginDataCookie(rw, *userAuth, refreshData.Claims.Login) {
+		http.Error(rw, "Failed to save login cookie", http.StatusInternalServerError)
+		return fmt.Errorf("failed to save login cookie: %w", ErrAuthHttpError)
 	}
 	return nil
 }

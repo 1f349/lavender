@@ -125,7 +125,7 @@ func (h *HttpServer) oauthUserAuthorization(rw http.ResponseWriter, req *http.Re
 		return "", err
 	}
 
-	auth, err := h.internalAuthenticationHandler(req)
+	auth, err := h.internalAuthenticationHandler(nil, req)
 	if err != nil {
 		return "", err
 	}

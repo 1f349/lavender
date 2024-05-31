@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"github.com/1f349/lavender/database"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
@@ -17,6 +18,8 @@ type UserAuth struct {
 }
 
 func (u UserAuth) IsGuest() bool { return u.Subject == "" }
+
+var ErrAuthHttpError = errors.New("auth http error")
 
 func (h *HttpServer) RequireAdminAuthentication(next UserHandler) httprouter.Handle {
 	return h.RequireAuthentication(func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
@@ -48,18 +51,29 @@ func (h *HttpServer) RequireAuthentication(next UserHandler) httprouter.Handle {
 
 func (h *HttpServer) OptionalAuthentication(next UserHandler) httprouter.Handle {
 	return func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		authUser, err := h.internalAuthenticationHandler(req)
+		authUser, err := h.internalAuthenticationHandler(rw, req)
 		if err != nil {
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
+			if !errors.Is(err, ErrAuthHttpError) {
+				http.Error(rw, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
 		next(rw, req, params, authUser)
 	}
 }
 
-func (h *HttpServer) internalAuthenticationHandler(req *http.Request) (UserAuth, error) {
+func (h *HttpServer) internalAuthenticationHandler(rw http.ResponseWriter, req *http.Request) (UserAuth, error) {
+	// Delete previous login data cookie
+	http.SetCookie(rw, &http.Cookie{
+		Name:     "lavender-login-data",
+		Path:     "/",
+		MaxAge:   -1,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	var u UserAuth
-	err := h.readLoginDataCookie(req, &u)
+	err := h.readLoginAccessCookie(rw, req, &u)
 	if err != nil {
 		// not logged in
 		return UserAuth{}, nil
