@@ -12,16 +12,8 @@ import (
 )
 
 func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
-	offset := 0
 	q := req.URL.Query()
-	if q.Has("offset") {
-		var err error
-		offset, err = strconv.Atoi(q.Get("offset"))
-		if err != nil {
-			http.Error(rw, "400 Bad Request: Invalid offset", http.StatusBadRequest)
-			return
-		}
-	}
+	offset, _ := strconv.Atoi(q.Get("offset"))
 
 	var roles string
 	var appList []database.GetAppListRow
