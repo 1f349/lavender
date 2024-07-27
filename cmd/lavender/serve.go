@@ -1,13 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
-	"errors"
 	"flag"
 	"github.com/1f349/lavender"
 	"github.com/1f349/lavender/logger"
@@ -15,9 +10,11 @@ import (
 	"github.com/1f349/lavender/server"
 	"github.com/1f349/mjwt"
 	"github.com/1f349/violet/utils"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/subcommands"
 	_ "github.com/mattn/go-sqlite3"
 	exitReload "github.com/mrmelon54/exit-reload"
+	"github.com/spf13/afero"
 	"os"
 	"path/filepath"
 )
@@ -69,15 +66,28 @@ func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{})
 	}
 	wd := filepath.Dir(configPathAbs)
 
-	signingKey, err := mjwt.NewMJwtSignerFromFileOrCreate(config.Issuer, filepath.Join(wd, "lavender.private.key"), rand.Reader, 4096)
+	keyDir := filepath.Join(wd, "keys")
+	err = os.MkdirAll(keyDir, 0700)
 	if err != nil {
-		logger.Logger.Fatal("Failed to load or create MJWT signer:", err)
+		logger.Logger.Fatal("Failed to create keys dir", "err", err)
 	}
-	saveMjwtPubKey(signingKey, wd)
+	keyStore, err := mjwt.NewKeyStoreFromDir(afero.NewBasePathFs(afero.NewOsFs(), keyDir))
+	if err != nil {
+		logger.Logger.Fatal("Failed to load MJWT keystore", "err", err)
+	}
+
+	if config.Kid == "" {
+		logger.Logger.Fatal("Invalid kid value")
+	}
+
+	signingKey, err := mjwt.NewIssuerWithKeyStore(config.Issuer, config.Kid, jwt.SigningMethodRS512, keyStore)
+	if err != nil {
+		logger.Logger.Fatal("Failed to load or create MJWT issuer", "err", err)
+	}
 
 	db, err := lavender.InitDB(filepath.Join(wd, "lavender.db.sqlite"))
 	if err != nil {
-		logger.Logger.Fatal("Failed to open database:", err)
+		logger.Logger.Fatal("Failed to open database", "err", err)
 	}
 
 	if err := pages.LoadPages(wd); err != nil {
@@ -94,17 +104,4 @@ func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{})
 	})
 
 	return subcommands.ExitSuccess
-}
-
-func saveMjwtPubKey(mSign mjwt.Signer, wd string) {
-	pubKey := x509.MarshalPKCS1PublicKey(mSign.PublicKey())
-	b := new(bytes.Buffer)
-	err := pem.Encode(b, &pem.Block{Type: "RSA PUBLIC KEY", Bytes: pubKey})
-	if err != nil {
-		logger.Logger.Fatal("Failed to encode MJWT public key:", err)
-	}
-	err = os.WriteFile(filepath.Join(wd, "lavender.public.key"), b.Bytes(), 0600)
-	if err != nil && !errors.Is(err, os.ErrExist) {
-		logger.Logger.Fatal("Failed to save MJWT public key:", err)
-	}
 }

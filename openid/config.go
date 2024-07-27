@@ -13,6 +13,7 @@ type Config struct {
 	ScopesSupported        []string `json:"scopes_supported"`
 	ClaimsSupported        []string `json:"claims_supported"`
 	GrantTypesSupported    []string `json:"grant_types_supported"`
+	JwksUri                string   `json:"jwks_uri"`
 }
 
 func GenConfig(baseUrl string, scopes, claims []string) Config {
@@ -30,5 +31,6 @@ func GenConfig(baseUrl string, scopes, claims []string) Config {
 		ScopesSupported:        scopes,
 		ClaimsSupported:        claims,
 		GrantTypesSupported:    []string{"authorization_code", "refresh_token"},
+		JwksUri:                baseUrl + ".well-known/jwks.json",
 	}
 }

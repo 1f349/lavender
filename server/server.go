@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"github.com/1f349/cache"
@@ -32,7 +33,7 @@ type HttpServer struct {
 	oauthMgr   *manage.Manager
 	db         *database.Queries
 	conf       Conf
-	signingKey mjwt.Signer
+	signingKey *mjwt.Issuer
 	manager    *issuer.Manager
 	flowState  *cache.Cache[string, flowStateData]
 }
@@ -43,7 +44,7 @@ type flowStateData struct {
 	redirect  string
 }
 
-func NewHttpServer(conf Conf, db *database.Queries, signingKey mjwt.Signer) *http.Server {
+func NewHttpServer(conf Conf, db *database.Queries, signingKey *mjwt.Issuer) *http.Server {
 	r := httprouter.New()
 	contentCache := time.Now()
 
@@ -59,6 +60,12 @@ func NewHttpServer(conf Conf, db *database.Queries, signingKey mjwt.Signer) *htt
 	openIdBytes, err := json.Marshal(openIdConf)
 	if err != nil {
 		logger.Logger.Fatal("Failed to generate OpenID configuration", "err", err)
+	}
+
+	jwkSetBuffer := new(bytes.Buffer)
+	err = mjwt.WriteJwkSetJson(jwkSetBuffer, []*mjwt.Issuer{signingKey})
+	if err != nil {
+		logger.Logger.Fatal("Failed to generate JWK Set", "err", err)
 	}
 
 	oauthManager := manage.NewDefaultManager()
@@ -112,6 +119,10 @@ func NewHttpServer(conf Conf, db *database.Queries, signingKey mjwt.Signer) *htt
 	r.GET("/.well-known/openid-configuration", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		rw.WriteHeader(http.StatusOK)
 		_, _ = rw.Write(openIdBytes)
+	})
+	r.GET("/.well-known/jwks.json", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		rw.WriteHeader(http.StatusOK)
+		_, _ = rw.Write(jwkSetBuffer.Bytes())
 	})
 	r.GET("/", hs.OptionalAuthentication(hs.Home))
 

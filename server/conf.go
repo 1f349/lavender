@@ -9,5 +9,6 @@ type Conf struct {
 	BaseUrl     string             `json:"base_url"`
 	ServiceName string             `json:"service_name"`
 	Issuer      string             `json:"issuer"`
+	Kid         string             `json:"kid"`
 	SsoServices []issuer.SsoConfig `json:"sso_services"`
 }

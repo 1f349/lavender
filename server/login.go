@@ -11,7 +11,6 @@ import (
 	"github.com/1f349/lavender/pages"
 	"github.com/1f349/mjwt"
 	"github.com/1f349/mjwt/auth"
-	"github.com/1f349/mjwt/claims"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
@@ -199,7 +198,7 @@ func (l lavenderLoginRefresh) Valid() error { return l.RefreshTokenClaims.Valid(
 func (l lavenderLoginRefresh) Type() string { return "lavender-login-refresh" }
 
 func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAuth, loginName string) bool {
-	ps := claims.NewPermStorage()
+	ps := auth.NewPermStorage()
 	accId := uuid.NewString()
 	gen, err := h.signingKey.GenerateJwt(authData.Subject, accId, jwt.ClaimStrings{h.conf.BaseUrl}, twelveHours, lavenderLoginAccess{
 		UserInfo:          authData.UserInfo,
@@ -237,7 +236,7 @@ func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAut
 	return false
 }
 
-func readJwtCookie[T mjwt.Claims](req *http.Request, cookieName string, signingKey mjwt.Verifier) (mjwt.BaseTypeClaims[T], error) {
+func readJwtCookie[T mjwt.Claims](req *http.Request, cookieName string, signingKey *mjwt.KeyStore) (mjwt.BaseTypeClaims[T], error) {
 	loginCookie, err := req.Cookie(cookieName)
 	if err != nil {
 		return mjwt.BaseTypeClaims[T]{}, err
@@ -250,7 +249,7 @@ func readJwtCookie[T mjwt.Claims](req *http.Request, cookieName string, signingK
 }
 
 func (h *HttpServer) readLoginAccessCookie(rw http.ResponseWriter, req *http.Request, u *UserAuth) error {
-	loginData, err := readJwtCookie[lavenderLoginAccess](req, "lavender-login-access", h.signingKey)
+	loginData, err := readJwtCookie[lavenderLoginAccess](req, "lavender-login-access", h.signingKey.KeyStore())
 	if err != nil {
 		return h.readLoginRefreshCookie(rw, req, u)
 	}
@@ -262,7 +261,7 @@ func (h *HttpServer) readLoginAccessCookie(rw http.ResponseWriter, req *http.Req
 }
 
 func (h *HttpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Request, userAuth *UserAuth) error {
-	refreshData, err := readJwtCookie[lavenderLoginRefresh](req, "lavender-login-refresh", h.signingKey)
+	refreshData, err := readJwtCookie[lavenderLoginRefresh](req, "lavender-login-refresh", h.signingKey.KeyStore())
 	if err != nil {
 		return err
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/mjwt"
 	"github.com/1f349/mjwt/auth"
-	"github.com/1f349/mjwt/claims"
 	"github.com/go-oauth2/oauth2/v4"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
@@ -15,11 +14,11 @@ import (
 )
 
 type JWTAccessGenerate struct {
-	signer mjwt.Signer
+	signer *mjwt.Issuer
 	db     *database.Queries
 }
 
-func NewJWTAccessGenerate(signer mjwt.Signer, db *database.Queries) *JWTAccessGenerate {
+func NewJWTAccessGenerate(signer *mjwt.Issuer, db *database.Queries) *JWTAccessGenerate {
 	return &JWTAccessGenerate{signer, db}
 }
 
@@ -31,8 +30,8 @@ func (j *JWTAccessGenerate) Token(ctx context.Context, data *oauth2.GenerateBasi
 		return "", "", err
 	}
 
-	ps := claims.ParsePermStorage(roles)
-	out := claims.NewPermStorage()
+	ps := auth.ParsePermStorage(roles)
+	out := auth.NewPermStorage()
 	ForEachRole(data.Client.(interface{ UsePerms() string }).UsePerms(), func(role string) {
 		for _, i := range ps.Filter(strings.Split(role, " ")).Dump() {
 			out.Set(i)
