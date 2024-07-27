@@ -6,6 +6,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 func (h *HttpServer) authorizeEndpoint(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
@@ -32,13 +33,19 @@ func (h *HttpServer) authorizeEndpoint(rw http.ResponseWriter, req *http.Request
 	}
 
 	redirectUri := form.Get("redirect_uri")
-	if redirectUri != client.GetDomain() {
+	clientDomains := strings.Fields(client.GetDomain())
+	allowedDomains := make(map[string]bool)
+	for _, i := range clientDomains {
+		allowedDomains[i] = true
+	}
+
+	if !allowedDomains[redirectUri] {
 		http.Error(rw, "Incorrect redirect URI", http.StatusBadRequest)
 		return
 	}
 
 	if form.Has("cancel") {
-		uCancel, err := url.Parse(client.GetDomain())
+		uCancel, err := url.Parse(redirectUri)
 		if err != nil {
 			http.Error(rw, "Invalid redirect URI", http.StatusBadRequest)
 			return
@@ -62,7 +69,7 @@ func (h *HttpServer) authorizeEndpoint(rw http.ResponseWriter, req *http.Request
 		return
 	case !isSSO && !isPost:
 		// find application redirect domain and name
-		appUrlFull, err := url.Parse(client.GetDomain())
+		appUrlFull, err := url.Parse(redirectUri)
 		if err != nil {
 			http.Error(rw, "500 Internal Server Error: Failed to parse application redirect URL", http.StatusInternalServerError)
 			return

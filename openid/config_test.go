@@ -15,5 +15,6 @@ func TestGenConfig(t *testing.T) {
 		ScopesSupported:        []string{"openid", "email"},
 		ClaimsSupported:        []string{"name", "email", "preferred_username"},
 		GrantTypesSupported:    []string{"authorization_code", "refresh_token"},
+		JwksUri:                "https://example.com/.well-known/jwks.json",
 	}, GenConfig("https://example.com", []string{"openid", "email"}, []string{"name", "email", "preferred_username"}))
 }
