@@ -10,6 +10,7 @@ import (
 	"github.com/1f349/lavender/server"
 	"github.com/1f349/mjwt"
 	"github.com/1f349/violet/utils"
+	"github.com/charmbracelet/log"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/subcommands"
 	_ "github.com/mattn/go-sqlite3"
@@ -19,7 +20,10 @@ import (
 	"path/filepath"
 )
 
-type serveCmd struct{ configPath string }
+type serveCmd struct {
+	configPath string
+	debugMode  bool
+}
 
 func (s *serveCmd) Name() string { return "serve" }
 
@@ -27,6 +31,7 @@ func (s *serveCmd) Synopsis() string { return "Serve API authentication service"
 
 func (s *serveCmd) SetFlags(f *flag.FlagSet) {
 	f.StringVar(&s.configPath, "conf", "", "/path/to/config.json : path to the config file")
+	f.BoolVar(&s.debugMode, "debug", false, "enable debug mode")
 }
 
 func (s *serveCmd) Usage() string {
@@ -37,6 +42,10 @@ func (s *serveCmd) Usage() string {
 
 func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 	logger.Logger.Info("Starting...")
+
+	if s.debugMode {
+		logger.Logger.SetLevel(log.DebugLevel)
+	}
 
 	if s.configPath == "" {
 		logger.Logger.Fatal("Config flag is missing")
