@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/1f349/lavender/logger"
 	"github.com/1f349/lavender/pages"
 	"github.com/1f349/lavender/scope"
 	"github.com/julienschmidt/httprouter"
@@ -110,6 +111,7 @@ func (h *HttpServer) authorizeEndpoint(rw http.ResponseWriter, req *http.Request
 	// redirect with an error if the action is not authorize
 	if form.Get("oauth_action") == "authorize" || isSSO {
 		if err := h.oauthSrv.HandleAuthorizeRequest(rw, req); err != nil {
+			logger.Logger.Error(err)
 			http.Error(rw, err.Error(), http.StatusBadRequest)
 		}
 		return
