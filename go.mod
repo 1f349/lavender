@@ -6,8 +6,12 @@ require (
 	github.com/1f349/cache v0.0.3
 	github.com/1f349/mjwt v0.4.1
 	github.com/1f349/overlapfs v0.0.1
+	github.com/1f349/tulip v0.0.0-20240725211619-6b19e2d4ca63
 	github.com/charmbracelet/log v0.4.0
 	github.com/cloudflare/tableflip v1.2.3
+	github.com/emersion/go-message v0.18.1
+	github.com/emersion/go-sasl v0.0.0-20231106173351-e73c9f7bad43
+	github.com/emersion/go-smtp v0.21.3
 	github.com/go-oauth2/oauth2/v4 v4.5.2
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/golang-migrate/migrate/v4 v4.17.1
@@ -17,7 +21,9 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/spf13/afero v1.11.0
 	github.com/stretchr/testify v1.9.0
+	golang.org/x/crypto v0.26.0
 	golang.org/x/oauth2 v0.22.0
+	golang.org/x/text v0.17.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -31,7 +37,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.0.4 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
-	github.com/gorilla/websocket v1.5.1 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
@@ -53,10 +59,8 @@ require (
 	github.com/tidwall/rtred v0.1.2 // indirect
 	github.com/tidwall/tinyqueue v0.1.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa // indirect
-	golang.org/x/net v0.27.0 // indirect
+	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
-	golang.org/x/text v0.17.0 // indirect
 )
