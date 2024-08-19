@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/1f349/cache"
 	clientStore "github.com/1f349/lavender/client-store"
+	"github.com/1f349/lavender/conf"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/logger"
@@ -32,7 +33,7 @@ type HttpServer struct {
 	oauthSrv   *server.Server
 	oauthMgr   *manage.Manager
 	db         *database.Queries
-	conf       Conf
+	conf       conf.Conf
 	signingKey *mjwt.Issuer
 	manager    *issuer.Manager
 	flowState  *cache.Cache[string, flowStateData]
@@ -44,19 +45,19 @@ type flowStateData struct {
 	redirect  string
 }
 
-func NewHttpServer(conf Conf, db *database.Queries, signingKey *mjwt.Issuer) *http.Server {
+func NewHttpServer(config conf.Conf, db *database.Queries, signingKey *mjwt.Issuer) *httprouter.Router {
 	r := httprouter.New()
 	contentCache := time.Now()
 
 	// remove last slash from baseUrl
 	{
-		l := len(conf.BaseUrl)
-		if conf.BaseUrl[l-1] == '/' {
-			conf.BaseUrl = conf.BaseUrl[:l-1]
+		l := len(config.BaseUrl)
+		if config.BaseUrl[l-1] == '/' {
+			config.BaseUrl = config.BaseUrl[:l-1]
 		}
 	}
 
-	openIdConf := openid.GenConfig(conf.BaseUrl, []string{"openid", "name", "username", "profile", "email", "birthdate", "age", "zoneinfo", "locale"}, []string{"sub", "name", "preferred_username", "profile", "picture", "website", "email", "email_verified", "gender", "birthdate", "zoneinfo", "locale", "updated_at"})
+	openIdConf := openid.GenConfig(config.BaseUrl, []string{"openid", "name", "username", "profile", "email", "birthdate", "age", "zoneinfo", "locale"}, []string{"sub", "name", "preferred_username", "profile", "picture", "website", "email", "email_verified", "gender", "birthdate", "zoneinfo", "locale", "updated_at"})
 	openIdBytes, err := json.Marshal(openIdConf)
 	if err != nil {
 		logger.Logger.Fatal("Failed to generate OpenID configuration", "err", err)
@@ -75,12 +76,12 @@ func NewHttpServer(conf Conf, db *database.Queries, signingKey *mjwt.Issuer) *ht
 		oauthSrv:   oauthSrv,
 		oauthMgr:   oauthManager,
 		db:         db,
-		conf:       conf,
+		conf:       config,
 		signingKey: signingKey,
 		flowState:  cache.New[string, flowStateData](),
 	}
 
-	hs.manager, err = issuer.NewManager(conf.SsoServices)
+	hs.manager, err = issuer.NewManager(config.SsoServices)
 	if err != nil {
 		logger.Logger.Fatal("Failed to reload SSO service manager", "err", err)
 	}
@@ -267,15 +268,7 @@ func NewHttpServer(conf Conf, db *database.Queries, signingKey *mjwt.Issuer) *ht
 	r.GET("/userinfo", userInfoRequest)
 	r.OPTIONS("/userinfo", userInfoRequest)
 
-	return &http.Server{
-		Addr:              conf.Listen,
-		Handler:           r,
-		ReadTimeout:       time.Minute,
-		ReadHeaderTimeout: time.Minute,
-		WriteTimeout:      time.Minute,
-		IdleTimeout:       time.Minute,
-		MaxHeaderBytes:    2500,
-	}
+	return r
 }
 
 func (h *HttpServer) SafeRedirect(rw http.ResponseWriter, req *http.Request) {
