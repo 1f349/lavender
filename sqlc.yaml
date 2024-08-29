@@ -8,3 +8,16 @@ sql:
         package: "database"
         out: "database"
         emit_json_tags: true
+        overrides:
+          - column: "users.password"
+            go_type: "github.com/1f349/tulip/password.HashString"
+          - column: "users.birthdate"
+            go_type: "github.com/hardfinhq/go-date.NullDate"
+          - column: "users.role"
+            go_type: "github.com/1f349/tulip/database/types.UserRole"
+          - column: "users.pronouns"
+            go_type: "github.com/1f349/tulip/database/types.UserPronoun"
+          - column: "users.zoneinfo"
+            go_type: "github.com/1f349/tulip/database/types.UserZone"
+          - column: "users.locale"
+            go_type: "github.com/1f349/tulip/database/types.UserLocale"

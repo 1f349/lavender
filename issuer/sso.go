@@ -17,9 +17,8 @@ var httpGet = http.Get
 // SsoConfig is the base URL for an OAUTH/OPENID/SSO login service
 // The path `/.well-known/openid-configuration` should be available
 type SsoConfig struct {
-	Addr      utils.JsonUrl   `json:"addr"`      // https://login.example.com
-	Namespace string          `json:"namespace"` // example.com
-	Client    SsoConfigClient `json:"client"`
+	Addr   utils.JsonUrl   `json:"addr"` // https://login.example.com
+	Client SsoConfigClient `json:"client"`
 }
 
 type SsoConfigClient struct {

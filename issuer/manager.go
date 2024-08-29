@@ -12,20 +12,20 @@ type Manager struct {
 	m map[string]*WellKnownOIDC
 }
 
-func NewManager(services []SsoConfig) (*Manager, error) {
+func NewManager(services map[string]SsoConfig) (*Manager, error) {
 	l := &Manager{m: make(map[string]*WellKnownOIDC)}
-	for _, i := range services {
-		if !isValidNamespace.MatchString(i.Namespace) {
-			return nil, fmt.Errorf("invalid namespace: %s", i.Namespace)
+	for namespace, ssoService := range services {
+		if !isValidNamespace.MatchString(namespace) {
+			return nil, fmt.Errorf("invalid namespace: %s", namespace)
 		}
 
-		conf, err := i.FetchConfig()
+		conf, err := ssoService.FetchConfig()
 		if err != nil {
 			return nil, err
 		}
 
 		// save by namespace
-		l.m[i.Namespace] = conf
+		l.m[namespace] = conf
 	}
 	return l, nil
 }
