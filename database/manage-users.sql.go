@@ -7,27 +7,51 @@ package database
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
+const changeUserActive = `-- name: ChangeUserActive :exec
+UPDATE users
+SET active = cast(? as boolean)
+WHERE subject = ?
+`
+
+type ChangeUserActiveParams struct {
+	Column1 bool   `json:"column_1"`
+	Subject string `json:"subject"`
+}
+
+func (q *Queries) ChangeUserActive(ctx context.Context, arg ChangeUserActiveParams) error {
+	_, err := q.db.ExecContext(ctx, changeUserActive, arg.Column1, arg.Subject)
+	return err
+}
+
 const getUserList = `-- name: GetUserList :many
-SELECT subject,
+SELECT users.subject,
+       name,
+       picture,
+       website,
        email,
        email_verified,
-       roles,
-       updated_at,
+       users.updated_at as user_updated_at,
+       p.updated_at     as profile_updated_at,
        active
 FROM users
-LIMIT 25 OFFSET ?
+         INNER JOIN main.profiles p on users.subject = p.subject
+LIMIT 50 OFFSET ?
 `
 
 type GetUserListRow struct {
-	Subject       string    `json:"subject"`
-	Email         string    `json:"email"`
-	EmailVerified bool      `json:"email_verified"`
-	Roles         string    `json:"roles"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	Active        bool      `json:"active"`
+	Subject          string    `json:"subject"`
+	Name             string    `json:"name"`
+	Picture          string    `json:"picture"`
+	Website          string    `json:"website"`
+	Email            string    `json:"email"`
+	EmailVerified    bool      `json:"email_verified"`
+	UserUpdatedAt    time.Time `json:"user_updated_at"`
+	ProfileUpdatedAt time.Time `json:"profile_updated_at"`
+	Active           bool      `json:"active"`
 }
 
 func (q *Queries) GetUserList(ctx context.Context, offset int64) ([]GetUserListRow, error) {
@@ -41,10 +65,13 @@ func (q *Queries) GetUserList(ctx context.Context, offset int64) ([]GetUserListR
 		var i GetUserListRow
 		if err := rows.Scan(
 			&i.Subject,
+			&i.Name,
+			&i.Picture,
+			&i.Website,
 			&i.Email,
 			&i.EmailVerified,
-			&i.Roles,
-			&i.UpdatedAt,
+			&i.UserUpdatedAt,
+			&i.ProfileUpdatedAt,
 			&i.Active,
 		); err != nil {
 			return nil, err
@@ -60,22 +87,50 @@ func (q *Queries) GetUserList(ctx context.Context, offset int64) ([]GetUserListR
 	return items, nil
 }
 
-const updateUser = `-- name: UpdateUser :exec
-UPDATE users
-SET active = ?,
-    roles=?
-WHERE subject = ?
+const getUsersRoles = `-- name: GetUsersRoles :many
+SELECT r.role, u.id
+FROM users_roles
+         INNER JOIN roles r on r.id = users_roles.role_id
+         INNER JOIN users u on u.id = users_roles.user_id
+WHERE u.id in /*SLICE:user_ids*/?
 `
 
-type UpdateUserParams struct {
-	Active  bool   `json:"active"`
-	Roles   string `json:"roles"`
-	Subject string `json:"subject"`
+type GetUsersRolesRow struct {
+	Role string `json:"role"`
+	ID   int64  `json:"id"`
 }
 
-func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
-	_, err := q.db.ExecContext(ctx, updateUser, arg.Active, arg.Roles, arg.Subject)
-	return err
+func (q *Queries) GetUsersRoles(ctx context.Context, userIds []int64) ([]GetUsersRolesRow, error) {
+	query := getUsersRoles
+	var queryParams []interface{}
+	if len(userIds) > 0 {
+		for _, v := range userIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:user_ids*/?", strings.Repeat(",?", len(userIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:user_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsersRolesRow
+	for rows.Next() {
+		var i GetUsersRolesRow
+		if err := rows.Scan(&i.Role, &i.ID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const userEmailExists = `-- name: UserEmailExists :one

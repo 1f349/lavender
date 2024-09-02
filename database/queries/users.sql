@@ -2,21 +2,15 @@
 SELECT count(subject) > 0 AS hasUser
 FROM users;
 
--- name: AddUser :exec
-INSERT INTO users (subject, email, email_verified, roles, userinfo, updated_at, active)
+-- name: addUser :exec
+INSERT INTO users (subject, password, email, email_verified, updated_at, registered, active)
 VALUES (?, ?, ?, ?, ?, ?, ?);
 
--- name: UpdateUserInfo :exec
-UPDATE users
-SET email          = ?,
-    email_verified = ?,
-    userinfo       = ?
-WHERE subject = ?;
-
--- name: GetUserRoles :one
-SELECT roles
+-- name: checkLogin :one
+SELECT subject, password, EXISTS(SELECT 1 FROM otp WHERE otp.subject = users.subject) == 1 AS has_otp, email, email_verified
 FROM users
-WHERE subject = ?;
+WHERE users.subject = ?
+LIMIT 1;
 
 -- name: GetUser :one
 SELECT *
@@ -24,20 +18,29 @@ FROM users
 WHERE subject = ?
 LIMIT 1;
 
--- name: UpdateUserToken :exec
+-- name: GetUserRoles :many
+SELECT r.role
+FROM users_roles
+         INNER JOIN roles r on r.id = users_roles.role_id
+         INNER JOIN users u on u.id = users_roles.user_id
+WHERE u.subject = ?;
+
+-- name: UserHasRole :one
+SELECT 1
+FROM roles
+         INNER JOIN users_roles on users_roles.user_id = roles.id
+         INNER JOIN users u on u.id = users_roles.user_id = u.id
+WHERE roles.role = ?
+  AND u.subject = ?;
+
+-- name: getUserPassword :one
+SELECT password
+FROM users
+WHERE subject = ?;
+
+-- name: changeUserPassword :exec
 UPDATE users
-SET access_token  = ?,
-    refresh_token = ?,
-    expiry        = ?
-WHERE subject = ?;
-
--- name: GetUserToken :one
-SELECT access_token, refresh_token, expiry
-FROM users
+SET password  = ?,
+    updated_at=?
 WHERE subject = ?
-LIMIT 1;
-
--- name: GetUserEmail :one
-SELECT email
-FROM users
-WHERE subject = ?;
+  AND password = ?;

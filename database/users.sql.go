@@ -7,40 +7,13 @@ package database
 
 import (
 	"context"
-	"database/sql"
 	"time"
+
+	"github.com/1f349/lavender/password"
 )
 
-const addUser = `-- name: AddUser :exec
-INSERT INTO users (subject, email, email_verified, roles, userinfo, updated_at, active)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-`
-
-type AddUserParams struct {
-	Subject       string    `json:"subject"`
-	Email         string    `json:"email"`
-	EmailVerified bool      `json:"email_verified"`
-	Roles         string    `json:"roles"`
-	Userinfo      string    `json:"userinfo"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	Active        bool      `json:"active"`
-}
-
-func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) error {
-	_, err := q.db.ExecContext(ctx, addUser,
-		arg.Subject,
-		arg.Email,
-		arg.EmailVerified,
-		arg.Roles,
-		arg.Userinfo,
-		arg.UpdatedAt,
-		arg.Active,
-	)
-	return err
-}
-
 const getUser = `-- name: GetUser :one
-SELECT subject, email, email_verified, roles, userinfo, access_token, refresh_token, expiry, updated_at, active
+SELECT id, subject, password, email, email_verified, updated_at, registered, active
 FROM users
 WHERE subject = ?
 LIMIT 1
@@ -50,64 +23,47 @@ func (q *Queries) GetUser(ctx context.Context, subject string) (User, error) {
 	row := q.db.QueryRowContext(ctx, getUser, subject)
 	var i User
 	err := row.Scan(
+		&i.ID,
 		&i.Subject,
+		&i.Password,
 		&i.Email,
 		&i.EmailVerified,
-		&i.Roles,
-		&i.Userinfo,
-		&i.AccessToken,
-		&i.RefreshToken,
-		&i.Expiry,
 		&i.UpdatedAt,
+		&i.Registered,
 		&i.Active,
 	)
 	return i, err
 }
 
-const getUserEmail = `-- name: GetUserEmail :one
-SELECT email
-FROM users
-WHERE subject = ?
+const getUserRoles = `-- name: GetUserRoles :many
+SELECT r.role
+FROM users_roles
+         INNER JOIN roles r on r.id = users_roles.role_id
+         INNER JOIN users u on u.id = users_roles.user_id
+WHERE u.subject = ?
 `
 
-func (q *Queries) GetUserEmail(ctx context.Context, subject string) (string, error) {
-	row := q.db.QueryRowContext(ctx, getUserEmail, subject)
-	var email string
-	err := row.Scan(&email)
-	return email, err
-}
-
-const getUserRoles = `-- name: GetUserRoles :one
-SELECT roles
-FROM users
-WHERE subject = ?
-`
-
-func (q *Queries) GetUserRoles(ctx context.Context, subject string) (string, error) {
-	row := q.db.QueryRowContext(ctx, getUserRoles, subject)
-	var roles string
-	err := row.Scan(&roles)
-	return roles, err
-}
-
-const getUserToken = `-- name: GetUserToken :one
-SELECT access_token, refresh_token, expiry
-FROM users
-WHERE subject = ?
-LIMIT 1
-`
-
-type GetUserTokenRow struct {
-	AccessToken  sql.NullString `json:"access_token"`
-	RefreshToken sql.NullString `json:"refresh_token"`
-	Expiry       sql.NullTime   `json:"expiry"`
-}
-
-func (q *Queries) GetUserToken(ctx context.Context, subject string) (GetUserTokenRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserToken, subject)
-	var i GetUserTokenRow
-	err := row.Scan(&i.AccessToken, &i.RefreshToken, &i.Expiry)
-	return i, err
+func (q *Queries) GetUserRoles(ctx context.Context, subject string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getUserRoles, subject)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var role string
+		if err := rows.Scan(&role); err != nil {
+			return nil, err
+		}
+		items = append(items, role)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const hasUser = `-- name: HasUser :one
@@ -122,52 +78,117 @@ func (q *Queries) HasUser(ctx context.Context) (bool, error) {
 	return hasuser, err
 }
 
-const updateUserInfo = `-- name: UpdateUserInfo :exec
-UPDATE users
-SET email          = ?,
-    email_verified = ?,
-    userinfo       = ?
-WHERE subject = ?
+const userHasRole = `-- name: UserHasRole :one
+SELECT 1
+FROM roles
+         INNER JOIN users_roles on users_roles.user_id = roles.id
+         INNER JOIN users u on u.id = users_roles.user_id = u.id
+WHERE roles.role = ?
+  AND u.subject = ?
 `
 
-type UpdateUserInfoParams struct {
-	Email         string `json:"email"`
-	EmailVerified bool   `json:"email_verified"`
-	Userinfo      string `json:"userinfo"`
-	Subject       string `json:"subject"`
+type UserHasRoleParams struct {
+	Role    string `json:"role"`
+	Subject string `json:"subject"`
 }
 
-func (q *Queries) UpdateUserInfo(ctx context.Context, arg UpdateUserInfoParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserInfo,
+func (q *Queries) UserHasRole(ctx context.Context, arg UserHasRoleParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, userHasRole, arg.Role, arg.Subject)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const addUser = `-- name: addUser :exec
+INSERT INTO users (subject, password, email, email_verified, updated_at, registered, active)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+`
+
+type addUserParams struct {
+	Subject       string              `json:"subject"`
+	Password      password.HashString `json:"password"`
+	Email         string              `json:"email"`
+	EmailVerified bool                `json:"email_verified"`
+	UpdatedAt     time.Time           `json:"updated_at"`
+	Registered    time.Time           `json:"registered"`
+	Active        bool                `json:"active"`
+}
+
+func (q *Queries) addUser(ctx context.Context, arg addUserParams) error {
+	_, err := q.db.ExecContext(ctx, addUser,
+		arg.Subject,
+		arg.Password,
 		arg.Email,
 		arg.EmailVerified,
-		arg.Userinfo,
-		arg.Subject,
+		arg.UpdatedAt,
+		arg.Registered,
+		arg.Active,
 	)
 	return err
 }
 
-const updateUserToken = `-- name: UpdateUserToken :exec
+const changeUserPassword = `-- name: changeUserPassword :exec
 UPDATE users
-SET access_token  = ?,
-    refresh_token = ?,
-    expiry        = ?
+SET password  = ?,
+    updated_at=?
+WHERE subject = ?
+  AND password = ?
+`
+
+type changeUserPasswordParams struct {
+	Password   password.HashString `json:"password"`
+	UpdatedAt  time.Time           `json:"updated_at"`
+	Subject    string              `json:"subject"`
+	Password_2 password.HashString `json:"password_2"`
+}
+
+func (q *Queries) changeUserPassword(ctx context.Context, arg changeUserPasswordParams) error {
+	_, err := q.db.ExecContext(ctx, changeUserPassword,
+		arg.Password,
+		arg.UpdatedAt,
+		arg.Subject,
+		arg.Password_2,
+	)
+	return err
+}
+
+const checkLogin = `-- name: checkLogin :one
+SELECT subject, password, EXISTS(SELECT 1 FROM otp WHERE otp.subject = users.subject) == 1 AS has_otp, email, email_verified
+FROM users
+WHERE users.subject = ?
+LIMIT 1
+`
+
+type checkLoginRow struct {
+	Subject       string              `json:"subject"`
+	Password      password.HashString `json:"password"`
+	HasOtp        bool                `json:"has_otp"`
+	Email         string              `json:"email"`
+	EmailVerified bool                `json:"email_verified"`
+}
+
+func (q *Queries) checkLogin(ctx context.Context, subject string) (checkLoginRow, error) {
+	row := q.db.QueryRowContext(ctx, checkLogin, subject)
+	var i checkLoginRow
+	err := row.Scan(
+		&i.Subject,
+		&i.Password,
+		&i.HasOtp,
+		&i.Email,
+		&i.EmailVerified,
+	)
+	return i, err
+}
+
+const getUserPassword = `-- name: getUserPassword :one
+SELECT password
+FROM users
 WHERE subject = ?
 `
 
-type UpdateUserTokenParams struct {
-	AccessToken  sql.NullString `json:"access_token"`
-	RefreshToken sql.NullString `json:"refresh_token"`
-	Expiry       sql.NullTime   `json:"expiry"`
-	Subject      string         `json:"subject"`
-}
-
-func (q *Queries) UpdateUserToken(ctx context.Context, arg UpdateUserTokenParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserToken,
-		arg.AccessToken,
-		arg.RefreshToken,
-		arg.Expiry,
-		arg.Subject,
-	)
-	return err
+func (q *Queries) getUserPassword(ctx context.Context, subject string) (password.HashString, error) {
+	row := q.db.QueryRowContext(ctx, getUserPassword, subject)
+	var password password.HashString
+	err := row.Scan(&password)
+	return password, err
 }

@@ -30,9 +30,9 @@ func (h *HttpServer) Home(rw http.ResponseWriter, req *http.Request, _ httproute
 
 	var isAdmin bool
 	h.DbTx(rw, func(tx *database.Queries) (err error) {
-		roles, err := tx.GetUserRoles(req.Context(), auth.Subject)
-		isAdmin = HasRole(roles, "lavender:admin")
-		return err
+		_, err = tx.UserHasRole(req.Context(), database.UserHasRoleParams{Role: "lavender:admin", Subject: auth.Subject})
+		isAdmin = err == nil
+		return nil
 	})
 
 	pages.RenderPageTemplate(rw, "index", map[string]any{

@@ -62,6 +62,7 @@ func (s SsoConfig) FetchConfig() (*WellKnownOIDC, error) {
 }
 
 type WellKnownOIDC struct {
+	Namespace              string        `json:"-"`
 	Config                 SsoConfig     `json:"-"`
 	Issuer                 string        `json:"issuer"`
 	AuthorizationEndpoint  string        `json:"authorization_endpoint"`

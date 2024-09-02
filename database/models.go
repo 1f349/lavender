@@ -5,31 +5,58 @@
 package database
 
 import (
-	"database/sql"
 	"time"
+
+	"github.com/1f349/lavender/password"
 )
 
 type ClientStore struct {
-	Subject string `json:"subject"`
-	Name    string `json:"name"`
+	Subject      string `json:"subject"`
+	Name         string `json:"name"`
+	Secret       string `json:"secret"`
+	Domain       string `json:"domain"`
+	OwnerSubject string `json:"owner_subject"`
+	Perms        string `json:"perms"`
+	Public       bool   `json:"public"`
+	Sso          bool   `json:"sso"`
+	Active       bool   `json:"active"`
+}
+
+type Otp struct {
+	Subject int64  `json:"subject"`
 	Secret  string `json:"secret"`
-	Domain  string `json:"domain"`
-	Owner   string `json:"owner"`
-	Perms   string `json:"perms"`
-	Public  bool   `json:"public"`
-	Sso     bool   `json:"sso"`
-	Active  bool   `json:"active"`
+	Digits  int64  `json:"digits"`
+}
+
+type Profile struct {
+	Subject   string      `json:"subject"`
+	Name      string      `json:"name"`
+	Picture   string      `json:"picture"`
+	Website   string      `json:"website"`
+	Pronouns  string      `json:"pronouns"`
+	Birthdate interface{} `json:"birthdate"`
+	Zone      string      `json:"zone"`
+	Locale    string      `json:"locale"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+type Role struct {
+	ID   int64  `json:"id"`
+	Role string `json:"role"`
 }
 
 type User struct {
-	Subject       string         `json:"subject"`
-	Email         string         `json:"email"`
-	EmailVerified bool           `json:"email_verified"`
-	Roles         string         `json:"roles"`
-	Userinfo      string         `json:"userinfo"`
-	AccessToken   sql.NullString `json:"access_token"`
-	RefreshToken  sql.NullString `json:"refresh_token"`
-	Expiry        sql.NullTime   `json:"expiry"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	Active        bool           `json:"active"`
+	ID            int64               `json:"id"`
+	Subject       string              `json:"subject"`
+	Password      password.HashString `json:"password"`
+	Email         string              `json:"email"`
+	EmailVerified bool                `json:"email_verified"`
+	UpdatedAt     time.Time           `json:"updated_at"`
+	Registered    time.Time           `json:"registered"`
+	Active        bool                `json:"active"`
+}
+
+type UsersRole struct {
+	RoleID int64 `json:"role_id"`
+	UserID int64 `json:"user_id"`
 }

@@ -30,9 +30,12 @@ func (j *JWTAccessGenerate) Token(ctx context.Context, data *oauth2.GenerateBasi
 		return "", "", err
 	}
 
-	ps := auth.ParsePermStorage(roles)
+	ps := auth.NewPermStorage()
+	for _, role := range roles {
+		ps.Set(role)
+	}
 	out := auth.NewPermStorage()
-	ForEachRole(data.Client.(interface{ UsePerms() string }).UsePerms(), func(role string) {
+	ForEachRole(data.Client.(interface{ UsePerms() []string }).UsePerms(), func(role string) {
 		for _, i := range ps.Filter(strings.Split(role, " ")).Dump() {
 			out.Set(i)
 		}

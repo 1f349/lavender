@@ -26,10 +26,9 @@ func TestManager_CheckNamespace(t *testing.T) {
 	httpGet = func(url string) (resp *http.Response, err error) {
 		return &http.Response{StatusCode: http.StatusOK, Body: testBody()}, nil
 	}
-	manager, err := NewManager([]SsoConfig{
-		{
-			Addr:      testAddrUrl,
-			Namespace: "example.com",
+	manager, err := NewManager(map[string]SsoConfig{
+		"example.com": {
+			Addr: testAddrUrl,
 		},
 	})
 	assert.NoError(t, err)
@@ -41,10 +40,9 @@ func TestManager_FindServiceFromLogin(t *testing.T) {
 	httpGet = func(url string) (resp *http.Response, err error) {
 		return &http.Response{StatusCode: http.StatusOK, Body: testBody()}, nil
 	}
-	manager, err := NewManager([]SsoConfig{
-		{
-			Addr:      testAddrUrl,
-			Namespace: "example.com",
+	manager, err := NewManager(map[string]SsoConfig{
+		"example.com": {
+			Addr: testAddrUrl,
 		},
 	})
 	assert.NoError(t, err)
