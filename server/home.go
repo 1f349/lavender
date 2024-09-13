@@ -3,13 +3,14 @@ package server
 import (
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/pages"
+	"github.com/1f349/lavender/role"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"time"
 )
 
-func (h *HttpServer) Home(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) Home(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	rw.Header().Set("Content-Type", "text/html")
 	lNonce := uuid.NewString()
 	http.SetCookie(rw, &http.Cookie{
@@ -30,7 +31,7 @@ func (h *HttpServer) Home(rw http.ResponseWriter, req *http.Request, _ httproute
 
 	var isAdmin bool
 	h.DbTx(rw, func(tx *database.Queries) (err error) {
-		_, err = tx.UserHasRole(req.Context(), database.UserHasRoleParams{Role: "lavender:admin", Subject: auth.Subject})
+		err = tx.UserHasRole(req.Context(), database.UserHasRoleParams{Role: role.LavenderAdmin, Subject: auth.Subject})
 		isAdmin = err == nil
 		return nil
 	})

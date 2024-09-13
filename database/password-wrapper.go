@@ -2,20 +2,19 @@ package database
 
 import (
 	"context"
-	"github.com/1f349/lavender/database/types"
 	"github.com/1f349/lavender/password"
 	"github.com/google/uuid"
 	"time"
 )
 
 type AddUserParams struct {
-	Name      string         `json:"name"`
-	Username  string         `json:"username"`
-	Password  string         `json:"password"`
-	Email     string         `json:"email"`
-	Role      types.UserRole `json:"role"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	Active    bool           `json:"active"`
+	Name          string    `json:"name"`
+	Subject       string    `json:"subject"`
+	Password      string    `json:"password"`
+	Email         string    `json:"email"`
+	EmailVerified bool      `json:"email_verified"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Active        bool      `json:"active"`
 }
 
 func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) (string, error) {
@@ -28,7 +27,7 @@ func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) (string, error
 		Subject:       uuid.NewString(),
 		Password:      pwHash,
 		Email:         arg.Email,
-		EmailVerified: false,
+		EmailVerified: arg.EmailVerified,
 		UpdatedAt:     n,
 		Registered:    n,
 		Active:        true,

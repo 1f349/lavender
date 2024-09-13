@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	auth2 "github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/pages"
@@ -21,7 +22,7 @@ import (
 	"time"
 )
 
-func (h *HttpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	if !auth.IsGuest() {
 		h.SafeRedirect(rw, req)
 		return
@@ -42,7 +43,7 @@ func (h *HttpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 	})
 }
 
-func (h *HttpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	if !auth.IsGuest() {
 		h.SafeRedirect(rw, req)
 		return
@@ -95,7 +96,7 @@ func (h *HttpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 	http.Redirect(rw, req, nextUrl, http.StatusFound)
 }
 
-func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, userAuth UserAuth) {
+func (h *httpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, userAuth UserAuth) {
 	flowState, ok := h.flowState.Get(req.FormValue("state"))
 	if !ok {
 		http.Error(rw, "Invalid flow state", http.StatusBadRequest)
@@ -123,7 +124,7 @@ func (h *HttpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ 
 	h.SafeRedirect(rw, req)
 }
 
-func (h *HttpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (UserAuth, error) {
+func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (UserAuth, error) {
 	sessionData, err := h.fetchUserInfo(sso, token)
 	if err != nil || sessionData.Subject == "" {
 		return UserAuth{}, fmt.Errorf("failed to fetch user info")
@@ -138,6 +139,16 @@ func (h *HttpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellK
 		if errors.Is(err, sql.ErrNoRows) {
 			uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
 			uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
+			id, err := tx.AddUser(req.Context(), database.AddUserParams{
+				Name:          "",
+				Subject:       sessionData.Subject,
+				Password:      "",
+				Email:         uEmail,
+				EmailVerified: uEmailVerified,
+				UpdatedAt:     time.Now(),
+				Active:        true,
+			})
+			return err
 			return tx.AddUser(req.Context(), database.AddUserParams{
 				Subject:       sessionData.Subject,
 				Email:         uEmail,
@@ -180,7 +191,7 @@ const twelveHours = 12 * time.Hour
 const oneWeek = 7 * 24 * time.Hour
 
 type lavenderLoginAccess struct {
-	UserInfo UserInfoFields `json:"user_info"`
+	UserInfo auth2.UserInfoFields `json:"user_info"`
 	auth.AccessTokenClaims
 }
 
@@ -197,7 +208,7 @@ func (l lavenderLoginRefresh) Valid() error { return l.RefreshTokenClaims.Valid(
 
 func (l lavenderLoginRefresh) Type() string { return "lavender-login-refresh" }
 
-func (h *HttpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAuth, loginName string) bool {
+func (h *httpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAuth, loginName string) bool {
 	ps := auth.NewPermStorage()
 	accId := uuid.NewString()
 	gen, err := h.signingKey.GenerateJwt(authData.Subject, accId, jwt.ClaimStrings{h.conf.BaseUrl}, twelveHours, lavenderLoginAccess{
@@ -248,7 +259,7 @@ func readJwtCookie[T mjwt.Claims](req *http.Request, cookieName string, signingK
 	return b, nil
 }
 
-func (h *HttpServer) readLoginAccessCookie(rw http.ResponseWriter, req *http.Request, u *UserAuth) error {
+func (h *httpServer) readLoginAccessCookie(rw http.ResponseWriter, req *http.Request, u *UserAuth) error {
 	loginData, err := readJwtCookie[lavenderLoginAccess](req, "lavender-login-access", h.signingKey.KeyStore())
 	if err != nil {
 		return h.readLoginRefreshCookie(rw, req, u)
@@ -260,7 +271,7 @@ func (h *HttpServer) readLoginAccessCookie(rw http.ResponseWriter, req *http.Req
 	return nil
 }
 
-func (h *HttpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Request, userAuth *UserAuth) error {
+func (h *httpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Request, userAuth *UserAuth) error {
 	refreshData, err := readJwtCookie[lavenderLoginRefresh](req, "lavender-login-refresh", h.signingKey.KeyStore())
 	if err != nil {
 		return err
@@ -298,14 +309,14 @@ func (h *HttpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Re
 	return nil
 }
 
-func (h *HttpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (UserAuth, error) {
+func (h *httpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (UserAuth, error) {
 	res, err := sso.OAuth2Config.Client(context.Background(), token).Get(sso.UserInfoEndpoint)
 	if err != nil || res.StatusCode != http.StatusOK {
 		return UserAuth{}, fmt.Errorf("request failed")
 	}
 	defer res.Body.Close()
 
-	var userInfoJson UserInfoFields
+	var userInfoJson auth2.UserInfoFields
 	if err := json.NewDecoder(res.Body).Decode(&userInfoJson); err != nil {
 		return UserAuth{}, err
 	}

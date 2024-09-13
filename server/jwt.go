@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"github.com/1f349/lavender/database"
 	"github.com/1f349/mjwt"
 	"github.com/1f349/mjwt/auth"
 	"github.com/go-oauth2/oauth2/v4"
@@ -15,14 +14,18 @@ import (
 
 type JWTAccessGenerate struct {
 	signer *mjwt.Issuer
-	db     *database.Queries
+	db     mjwtGetUserRoles
 }
 
-func NewJWTAccessGenerate(signer *mjwt.Issuer, db *database.Queries) *JWTAccessGenerate {
+func NewMJWTAccessGenerate(signer *mjwt.Issuer, db mjwtGetUserRoles) *JWTAccessGenerate {
 	return &JWTAccessGenerate{signer, db}
 }
 
 var _ oauth2.AccessGenerate = &JWTAccessGenerate{}
+
+type mjwtGetUserRoles interface {
+	GetUserRoles(ctx context.Context, subject string) ([]string, error)
+}
 
 func (j *JWTAccessGenerate) Token(ctx context.Context, data *oauth2.GenerateBasic, isGenRefresh bool) (access, refresh string, err error) {
 	roles, err := j.db.GetUserRoles(ctx, data.UserID)

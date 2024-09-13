@@ -3,13 +3,14 @@ package server
 import (
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/pages"
+	"github.com/1f349/lavender/role"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"net/url"
 	"strconv"
 )
 
-func (h *HttpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	q := req.URL.Query()
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
@@ -25,7 +26,7 @@ func (h *HttpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _
 	}) {
 		return
 	}
-	if !HasRole(roles, "lavender:admin") {
+	if !HasRole(roles, role.LavenderAdmin) {
 		http.Error(rw, "403 Forbidden", http.StatusForbidden)
 		return
 	}
@@ -56,7 +57,7 @@ func (h *HttpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _
 	pages.RenderPageTemplate(rw, "manage-users", m)
 }
 
-func (h *HttpServer) ManageUsersPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) ManageUsersPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	err := req.ParseForm()
 	if err != nil {
 		http.Error(rw, "400 Bad Request: Failed to parse form", http.StatusBadRequest)

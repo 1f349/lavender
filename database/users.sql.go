@@ -78,7 +78,7 @@ func (q *Queries) HasUser(ctx context.Context) (bool, error) {
 	return hasuser, err
 }
 
-const userHasRole = `-- name: UserHasRole :one
+const userHasRole = `-- name: UserHasRole :exec
 SELECT 1
 FROM roles
          INNER JOIN users_roles on users_roles.user_id = roles.id
@@ -92,11 +92,9 @@ type UserHasRoleParams struct {
 	Subject string `json:"subject"`
 }
 
-func (q *Queries) UserHasRole(ctx context.Context, arg UserHasRoleParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, userHasRole, arg.Role, arg.Subject)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
+func (q *Queries) UserHasRole(ctx context.Context, arg UserHasRoleParams) error {
+	_, err := q.db.ExecContext(ctx, userHasRole, arg.Role, arg.Subject)
+	return err
 }
 
 const addUser = `-- name: addUser :exec

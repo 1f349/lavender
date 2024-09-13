@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func (h *HttpServer) authorizeEndpoint(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) authorizeEndpoint(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	// function is only called with GET or POST method
 	isPost := req.Method == http.MethodPost
 
@@ -128,7 +128,7 @@ func (h *HttpServer) authorizeEndpoint(rw http.ResponseWriter, req *http.Request
 	http.Redirect(rw, req, parsedRedirect.String(), http.StatusFound)
 }
 
-func (h *HttpServer) oauthUserAuthorization(rw http.ResponseWriter, req *http.Request) (string, error) {
+func (h *httpServer) oauthUserAuthorization(rw http.ResponseWriter, req *http.Request) (string, error) {
 	err := req.ParseForm()
 	if err != nil {
 		return "", err

@@ -13,6 +13,7 @@ import (
 	"github.com/cloudflare/tableflip"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/subcommands"
+	"github.com/julienschmidt/httprouter"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/afero"
 	"gopkg.in/yaml.v3"
@@ -122,7 +123,8 @@ func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{})
 		logger.Logger.Fatal("Listen failed", "err", err)
 	}
 
-	mux := server.NewHttpServer(config, db, signingKey)
+	mux := httprouter.New()
+	server.SetupRouter(mux, config, db, signingKey)
 	srv := &http.Server{
 		Handler:           mux,
 		ReadTimeout:       time.Minute,

@@ -4,6 +4,7 @@ import (
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/pages"
 	"github.com/1f349/lavender/password"
+	"github.com/1f349/lavender/role"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
@@ -11,7 +12,7 @@ import (
 	"strconv"
 )
 
-func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	q := req.URL.Query()
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
@@ -24,7 +25,7 @@ func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ 
 		}
 		appList, err = tx.GetAppList(req.Context(), database.GetAppListParams{
 			Owner:   auth.Subject,
-			Column2: HasRole(roles, "lavender:admin"),
+			Column2: HasRole(roles, role.LavenderAdmin),
 			Offset:  int64(offset),
 		})
 		return
@@ -59,7 +60,7 @@ func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ 
 	pages.RenderPageTemplate(rw, "manage-apps", m)
 }
 
-func (h *HttpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	var roles string
 	if h.DbTx(rw, func(tx *database.Queries) (err error) {
 		roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
@@ -70,7 +71,7 @@ func (h *HttpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Reque
 
 	m := map[string]any{
 		"ServiceName": h.conf.ServiceName,
-		"IsAdmin":     HasRole(roles, "lavender:admin"),
+		"IsAdmin":     HasRole(roles, role.LavenderAdmin),
 	}
 
 	rw.Header().Set("Content-Type", "text/html")
@@ -78,7 +79,7 @@ func (h *HttpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Reque
 	pages.RenderPageTemplate(rw, "manage-apps-create", m)
 }
 
-func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	err := req.ParseForm()
 	if err != nil {
 		http.Error(rw, "400 Bad Request: Failed to parse form", http.StatusBadRequest)

@@ -1,31 +1,32 @@
 CREATE TABLE users
 (
-    id             INTEGER  NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
-    subject        TEXT     NOT NULL UNIQUE,
-    password       TEXT     NOT NULL,
+    id              INTEGER  NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+    subject         TEXT     NOT NULL UNIQUE,
+    password        TEXT     NOT NULL,
 
-    email          TEXT     NOT NULL,
-    email_verified BOOLEAN  NOT NULL DEFAULT 0,
+    change_password BOOLEAN  NOT NULL,
 
-    updated_at     DATETIME NOT NULL,
-    registered     DATETIME NOT NULL,
-    active         BOOLEAN  NOT NULL DEFAULT 1
+    email           TEXT     NOT NULL,
+    email_verified  BOOLEAN  NOT NULL,
+
+    updated_at      DATETIME NOT NULL,
+    registered      DATETIME NOT NULL,
+    active          BOOLEAN  NOT NULL DEFAULT 1,
+
+    name            TEXT     NOT NULL,
+    picture         TEXT     NOT NULL DEFAULT '',
+    website         TEXT     NOT NULL DEFAULT '',
+    pronouns        TEXT     NOT NULL DEFAULT 'they/them',
+    birthdate       DATE     NULL     DEFAULT NULL,
+    zone            TEXT     NOT NULL DEFAULT 'UTC',
+    locale          TEXT     NOT NULL DEFAULT 'en-US',
+
+    auth_type       INTEGER  NOT NULL,
+    auth_namespace  TEXT     NOT NULL,
+    auth_user       TEXT     NOT NULL
 );
 
 CREATE INDEX users_subject ON users (subject);
-
-CREATE TABLE profiles
-(
-    subject    TEXT     NOT NULL UNIQUE PRIMARY KEY,
-    name       TEXT     NOT NULL,
-    picture    TEXT     NOT NULL DEFAULT '',
-    website    TEXT     NOT NULL DEFAULT '',
-    pronouns   TEXT     NOT NULL DEFAULT 'they/them',
-    birthdate  DATE     NULL,
-    zone       TEXT     NOT NULL DEFAULT 'UTC',
-    locale     TEXT     NOT NULL DEFAULT 'en-US',
-    updated_at DATETIME NOT NULL
-);
 
 CREATE TABLE roles
 (

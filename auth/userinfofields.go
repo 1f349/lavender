@@ -1,4 +1,4 @@
-package server
+package auth
 
 type UserInfoFields map[string]any
 
