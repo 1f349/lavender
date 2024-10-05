@@ -25,6 +25,7 @@ func NewManager(services map[string]SsoConfig) (*Manager, error) {
 		}
 
 		// save by namespace
+		conf.Namespace = namespace
 		l.m[namespace] = conf
 	}
 	return l, nil

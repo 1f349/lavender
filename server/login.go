@@ -8,6 +8,7 @@ import (
 	"fmt"
 	auth2 "github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/database"
+	"github.com/1f349/lavender/database/types"
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/pages"
 	"github.com/1f349/mjwt"
@@ -15,12 +16,30 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
+	"github.com/mrmelon54/pronouns"
 	"golang.org/x/oauth2"
+	"golang.org/x/text/language"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 )
+
+// getUserLoginName finds the `login_name` query parameter within the `/authorize` redirect url
+func getUserLoginName(req *http.Request) string {
+	q := req.URL.Query()
+	if !q.Has("redirect") {
+		return ""
+	}
+	originUrl, err := url.ParseRequestURI(q.Get("redirect"))
+	if err != nil {
+		return ""
+	}
+	if originUrl.Path != "/authorize" {
+		return ""
+	}
+	return originUrl.Query().Get("login_name")
+}
 
 func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	if !auth.IsGuest() {
@@ -131,41 +150,70 @@ func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellK
 	}
 
 	err = h.DbTxError(func(tx *database.Queries) error {
-		jBytes, err := json.Marshal(sessionData.UserInfo)
+		name := sessionData.UserInfo.GetStringOrDefault("name", "Unknown User")
+
+		_, err = tx.GetUser(req.Context(), sessionData.Subject)
+		uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
+		uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
+		if errors.Is(err, sql.ErrNoRows) {
+			_, err := tx.AddOAuthUser(req.Context(), database.AddOAuthUserParams{
+				Email:         uEmail,
+				EmailVerified: uEmailVerified,
+				Name:          name,
+				Username:      sessionData.UserInfo.GetStringFromKeysOrEmpty("login", "preferred_username"),
+				AuthNamespace: sso.Namespace,
+				AuthUser:      sessionData.UserInfo.GetStringOrEmpty("sub"),
+			})
+			return err
+		}
+
+		err = tx.ModifyUserEmail(req.Context(), database.ModifyUserEmailParams{
+			Email:         uEmail,
+			EmailVerified: uEmailVerified,
+			Subject:       sessionData.Subject,
+		})
 		if err != nil {
 			return err
 		}
-		_, err = tx.GetUser(req.Context(), sessionData.Subject)
-		if errors.Is(err, sql.ErrNoRows) {
-			uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
-			uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
-			id, err := tx.AddUser(req.Context(), database.AddUserParams{
-				Name:          "",
-				Subject:       sessionData.Subject,
-				Password:      "",
-				Email:         uEmail,
-				EmailVerified: uEmailVerified,
-				UpdatedAt:     time.Now(),
-				Active:        true,
-			})
+
+		err = tx.ModifyUserAuth(req.Context(), database.ModifyUserAuthParams{
+			AuthType:      types.AuthTypeOauth2,
+			AuthNamespace: sso.Namespace,
+			AuthUser:      sessionData.UserInfo.GetStringOrEmpty("sub"),
+			Subject:       sessionData.Subject,
+		})
+		if err != nil {
 			return err
-			return tx.AddUser(req.Context(), database.AddUserParams{
-				Subject:       sessionData.Subject,
-				Email:         uEmail,
-				EmailVerified: uEmailVerified,
-				Roles:         "",
-				Userinfo:      string(jBytes),
-				UpdatedAt:     time.Now(),
-				Active:        true,
-			})
 		}
-		uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
-		uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
-		return tx.UpdateUserInfo(req.Context(), database.UpdateUserInfoParams{
-			Email:         sessionData.Subject,
-			EmailVerified: uEmailVerified,
-			Userinfo:      string(jBytes),
-			Subject:       uEmail,
+
+		err = tx.ModifyUserRemoteLogin(req.Context(), database.ModifyUserRemoteLoginParams{
+			Login:      sessionData.UserInfo.GetStringFromKeysOrEmpty("login", "preferred_username"),
+			ProfileUrl: sessionData.UserInfo.GetStringOrEmpty("profile"),
+			Subject:    sessionData.Subject,
+		})
+		if err != nil {
+			return err
+		}
+
+		pronoun, err := pronouns.FindPronoun(sessionData.UserInfo.GetStringOrEmpty("pronouns"))
+		if err != nil {
+			pronoun = pronouns.TheyThem
+		}
+		locale, err := language.Parse(sessionData.UserInfo.GetStringOrEmpty("locale"))
+		if err != nil {
+			locale = language.AmericanEnglish
+		}
+
+		return tx.ModifyProfile(req.Context(), database.ModifyProfileParams{
+			Name:      name,
+			Picture:   sessionData.UserInfo.GetStringOrEmpty("profile"),
+			Website:   sessionData.UserInfo.GetStringOrEmpty("website"),
+			Pronouns:  types.UserPronoun{Pronoun: pronoun},
+			Birthdate: sessionData.UserInfo.GetNullDate("birthdate"),
+			Zone:      sessionData.UserInfo.GetStringOrDefault("zoneinfo", "UTC"),
+			Locale:    types.UserLocale{Tag: locale},
+			UpdatedAt: time.Now(),
+			Subject:   sessionData.Subject,
 		})
 	})
 	if err != nil {
@@ -177,7 +225,7 @@ func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellK
 		return tx.UpdateUserToken(req.Context(), database.UpdateUserTokenParams{
 			AccessToken:  sql.NullString{String: token.AccessToken, Valid: true},
 			RefreshToken: sql.NullString{String: token.RefreshToken, Valid: true},
-			Expiry:       sql.NullTime{Time: token.Expiry, Valid: true},
+			TokenExpiry:  sql.NullTime{Time: token.Expiry, Valid: true},
 			Subject:      sessionData.Subject,
 		})
 	}); err != nil {
@@ -207,6 +255,11 @@ type lavenderLoginRefresh struct {
 func (l lavenderLoginRefresh) Valid() error { return l.RefreshTokenClaims.Valid() }
 
 func (l lavenderLoginRefresh) Type() string { return "lavender-login-refresh" }
+
+func (h *httpServer) setLoginDataCookie2(rw http.ResponseWriter, authData UserAuth) bool {
+	// TODO(melon): should probably merge there methods
+	return h.setLoginDataCookie(rw, authData, "")
+}
 
 func (h *httpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAuth, loginName string) bool {
 	ps := auth.NewPermStorage()
@@ -286,13 +339,13 @@ func (h *httpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Re
 		if err != nil {
 			return err
 		}
-		if !token.AccessToken.Valid || !token.RefreshToken.Valid || !token.Expiry.Valid {
+		if !token.AccessToken.Valid || !token.RefreshToken.Valid || !token.TokenExpiry.Valid {
 			return fmt.Errorf("invalid oauth token")
 		}
 		oauthToken = &oauth2.Token{
 			AccessToken:  token.AccessToken.String,
 			RefreshToken: token.RefreshToken.String,
-			Expiry:       token.Expiry.Time,
+			Expiry:       token.TokenExpiry.Time,
 		}
 		return nil
 	})

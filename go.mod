@@ -6,12 +6,10 @@ require (
 	github.com/1f349/cache v0.0.3
 	github.com/1f349/mjwt v0.4.1
 	github.com/1f349/overlapfs v0.0.1
-	github.com/1f349/tulip v0.0.0-20240725211619-6b19e2d4ca63
+	github.com/1f349/simplemail v0.0.5
 	github.com/charmbracelet/log v0.4.0
 	github.com/cloudflare/tableflip v1.2.3
 	github.com/emersion/go-message v0.18.1
-	github.com/emersion/go-sasl v0.0.0-20231106173351-e73c9f7bad43
-	github.com/emersion/go-smtp v0.21.3
 	github.com/go-oauth2/oauth2/v4 v4.5.2
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/golang-migrate/migrate/v4 v4.17.1
@@ -21,10 +19,13 @@ require (
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/mrmelon54/pronouns v1.0.3
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/afero v1.11.0
 	github.com/stretchr/testify v1.9.0
+	github.com/xlzd/gotp v0.1.0
 	golang.org/x/crypto v0.26.0
 	golang.org/x/oauth2 v0.22.0
+	golang.org/x/sync v0.8.0
 	golang.org/x/text v0.17.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -36,6 +37,8 @@ require (
 	github.com/charmbracelet/lipgloss v0.12.1 // indirect
 	github.com/charmbracelet/x/ansi v0.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/emersion/go-sasl v0.0.0-20231106173351-e73c9f7bad43 // indirect
+	github.com/emersion/go-smtp v0.21.3 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.4 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
@@ -63,6 +66,5 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa // indirect
 	golang.org/x/net v0.28.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
 )

@@ -59,7 +59,7 @@ func (h *httpServer) RequireAdminAuthentication(next UserHandler) httprouter.Han
 }
 
 func (h *httpServer) RequireAuthentication(next UserHandler) httprouter.Handle {
-	return h.OptionalAuthentication(func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
+	return h.OptionalAuthentication(false, func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
 		if auth.IsGuest() {
 			redirectUrl := PrepareRedirectUrl("/login", req.URL)
 			http.Redirect(rw, req, redirectUrl.String(), http.StatusFound)
@@ -69,16 +69,20 @@ func (h *httpServer) RequireAuthentication(next UserHandler) httprouter.Handle {
 	})
 }
 
-func (h *httpServer) OptionalAuthentication(next UserHandler) httprouter.Handle {
+func (h *httpServer) OptionalAuthentication(flowPart bool, next UserHandler) httprouter.Handle {
 	return func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		authUser, err := h.internalAuthenticationHandler(rw, req)
+		authData, err := h.internalAuthenticationHandler(rw, req)
 		if err != nil {
 			if !errors.Is(err, ErrAuthHttpError) {
 				http.Error(rw, err.Error(), http.StatusInternalServerError)
 			}
 			return
 		}
-		next(rw, req, params, authUser)
+		if n := authData.NextFlowUrl(req.URL); n != nil && !flowPart {
+			http.Redirect(rw, req, n.String(), http.StatusFound)
+			return
+		}
+		next(rw, req, params, authData)
 	}
 }
 

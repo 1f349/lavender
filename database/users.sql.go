@@ -9,11 +9,24 @@ import (
 	"context"
 	"time"
 
+	"github.com/1f349/lavender/database/types"
 	"github.com/1f349/lavender/password"
 )
 
+const flagUserAsDeleted = `-- name: FlagUserAsDeleted :exec
+UPDATE users
+SET active= false,
+    to_delete = true
+WHERE subject = ?
+`
+
+func (q *Queries) FlagUserAsDeleted(ctx context.Context, subject string) error {
+	_, err := q.db.ExecContext(ctx, flagUserAsDeleted, subject)
+	return err
+}
+
 const getUser = `-- name: GetUser :one
-SELECT id, subject, password, email, email_verified, updated_at, registered, active
+SELECT id, subject, password, change_password, email, email_verified, updated_at, registered, active, name, picture, website, pronouns, birthdate, zone, locale, login, profile_url, auth_type, auth_namespace, auth_user, access_token, refresh_token, token_expiry, otp_secret, otp_digits, to_delete
 FROM users
 WHERE subject = ?
 LIMIT 1
@@ -26,11 +39,30 @@ func (q *Queries) GetUser(ctx context.Context, subject string) (User, error) {
 		&i.ID,
 		&i.Subject,
 		&i.Password,
+		&i.ChangePassword,
 		&i.Email,
 		&i.EmailVerified,
 		&i.UpdatedAt,
 		&i.Registered,
 		&i.Active,
+		&i.Name,
+		&i.Picture,
+		&i.Website,
+		&i.Pronouns,
+		&i.Birthdate,
+		&i.Zone,
+		&i.Locale,
+		&i.Login,
+		&i.ProfileUrl,
+		&i.AuthType,
+		&i.AuthNamespace,
+		&i.AuthUser,
+		&i.AccessToken,
+		&i.RefreshToken,
+		&i.TokenExpiry,
+		&i.OtpSecret,
+		&i.OtpDigits,
+		&i.ToDelete,
 	)
 	return i, err
 }
@@ -98,18 +130,24 @@ func (q *Queries) UserHasRole(ctx context.Context, arg UserHasRoleParams) error 
 }
 
 const addUser = `-- name: addUser :exec
-INSERT INTO users (subject, password, email, email_verified, updated_at, registered, active)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO users (subject, password, email, email_verified, updated_at, registered, active, name, login, change_password, auth_type, auth_namespace, auth_user)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type addUserParams struct {
-	Subject       string              `json:"subject"`
-	Password      password.HashString `json:"password"`
-	Email         string              `json:"email"`
-	EmailVerified bool                `json:"email_verified"`
-	UpdatedAt     time.Time           `json:"updated_at"`
-	Registered    time.Time           `json:"registered"`
-	Active        bool                `json:"active"`
+	Subject        string              `json:"subject"`
+	Password       password.HashString `json:"password"`
+	Email          string              `json:"email"`
+	EmailVerified  bool                `json:"email_verified"`
+	UpdatedAt      time.Time           `json:"updated_at"`
+	Registered     time.Time           `json:"registered"`
+	Active         bool                `json:"active"`
+	Name           string              `json:"name"`
+	Login          string              `json:"login"`
+	ChangePassword bool                `json:"change_password"`
+	AuthType       types.AuthType      `json:"auth_type"`
+	AuthNamespace  string              `json:"auth_namespace"`
+	AuthUser       string              `json:"auth_user"`
 }
 
 func (q *Queries) addUser(ctx context.Context, arg addUserParams) error {
@@ -121,6 +159,12 @@ func (q *Queries) addUser(ctx context.Context, arg addUserParams) error {
 		arg.UpdatedAt,
 		arg.Registered,
 		arg.Active,
+		arg.Name,
+		arg.Login,
+		arg.ChangePassword,
+		arg.AuthType,
+		arg.AuthNamespace,
+		arg.AuthUser,
 	)
 	return err
 }
@@ -151,7 +195,7 @@ func (q *Queries) changeUserPassword(ctx context.Context, arg changeUserPassword
 }
 
 const checkLogin = `-- name: checkLogin :one
-SELECT subject, password, EXISTS(SELECT 1 FROM otp WHERE otp.subject = users.subject) == 1 AS has_otp, email, email_verified
+SELECT subject, password, CAST(otp_secret != '' AS BOOLEAN) AS has_otp, email, email_verified
 FROM users
 WHERE users.subject = ?
 LIMIT 1

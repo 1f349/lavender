@@ -7,9 +7,29 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"time"
+
+	"github.com/1f349/lavender/database/types"
 )
+
+const addUserRole = `-- name: AddUserRole :exec
+INSERT INTO users_roles(role_id, user_id)
+SELECT ?, users.id
+FROM users
+WHERE subject = ?
+`
+
+type AddUserRoleParams struct {
+	RoleID  int64  `json:"role_id"`
+	Subject string `json:"subject"`
+}
+
+func (q *Queries) AddUserRole(ctx context.Context, arg AddUserRoleParams) error {
+	_, err := q.db.ExecContext(ctx, addUserRole, arg.RoleID, arg.Subject)
+	return err
+}
 
 const changeUserActive = `-- name: ChangeUserActive :exec
 UPDATE users
@@ -34,26 +54,24 @@ SELECT users.subject,
        website,
        email,
        email_verified,
-       users.updated_at as user_updated_at,
-       p.updated_at     as profile_updated_at,
+       updated_at,
        active
 FROM users
-         INNER JOIN main.profiles p on users.subject = p.subject
 LIMIT 50 OFFSET ?
 `
 
 type GetUserListRow struct {
-	Subject          string    `json:"subject"`
-	Name             string    `json:"name"`
-	Picture          string    `json:"picture"`
-	Website          string    `json:"website"`
-	Email            string    `json:"email"`
-	EmailVerified    bool      `json:"email_verified"`
-	UserUpdatedAt    time.Time `json:"user_updated_at"`
-	ProfileUpdatedAt time.Time `json:"profile_updated_at"`
-	Active           bool      `json:"active"`
+	Subject       string    `json:"subject"`
+	Name          string    `json:"name"`
+	Picture       string    `json:"picture"`
+	Website       string    `json:"website"`
+	Email         string    `json:"email"`
+	EmailVerified bool      `json:"email_verified"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Active        bool      `json:"active"`
 }
 
+// INNER JOIN main.profiles p on users.subject = p.subject
 func (q *Queries) GetUserList(ctx context.Context, offset int64) ([]GetUserListRow, error) {
 	rows, err := q.db.QueryContext(ctx, getUserList, offset)
 	if err != nil {
@@ -70,8 +88,7 @@ func (q *Queries) GetUserList(ctx context.Context, offset int64) ([]GetUserListR
 			&i.Website,
 			&i.Email,
 			&i.EmailVerified,
-			&i.UserUpdatedAt,
-			&i.ProfileUpdatedAt,
+			&i.UpdatedAt,
 			&i.Active,
 		); err != nil {
 			return nil, err
@@ -85,6 +102,25 @@ func (q *Queries) GetUserList(ctx context.Context, offset int64) ([]GetUserListR
 		return nil, err
 	}
 	return items, nil
+}
+
+const getUserToken = `-- name: GetUserToken :one
+SELECT access_token, refresh_token, token_expiry
+FROM users
+WHERE subject = ?
+`
+
+type GetUserTokenRow struct {
+	AccessToken  sql.NullString `json:"access_token"`
+	RefreshToken sql.NullString `json:"refresh_token"`
+	TokenExpiry  sql.NullTime   `json:"token_expiry"`
+}
+
+func (q *Queries) GetUserToken(ctx context.Context, subject string) (GetUserTokenRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserToken, subject)
+	var i GetUserTokenRow
+	err := row.Scan(&i.AccessToken, &i.RefreshToken, &i.TokenExpiry)
+	return i, err
 }
 
 const getUsersRoles = `-- name: GetUsersRoles :many
@@ -133,6 +169,105 @@ func (q *Queries) GetUsersRoles(ctx context.Context, userIds []int64) ([]GetUser
 	return items, nil
 }
 
+const modifyUserAuth = `-- name: ModifyUserAuth :exec
+UPDATE users
+SET auth_type     = ?,
+    auth_namespace=?,
+    auth_user     = ?
+WHERE subject = ?
+`
+
+type ModifyUserAuthParams struct {
+	AuthType      types.AuthType `json:"auth_type"`
+	AuthNamespace string         `json:"auth_namespace"`
+	AuthUser      string         `json:"auth_user"`
+	Subject       string         `json:"subject"`
+}
+
+func (q *Queries) ModifyUserAuth(ctx context.Context, arg ModifyUserAuthParams) error {
+	_, err := q.db.ExecContext(ctx, modifyUserAuth,
+		arg.AuthType,
+		arg.AuthNamespace,
+		arg.AuthUser,
+		arg.Subject,
+	)
+	return err
+}
+
+const modifyUserEmail = `-- name: ModifyUserEmail :exec
+UPDATE users
+SET email         = ?,
+    email_verified=?
+WHERE subject = ?
+`
+
+type ModifyUserEmailParams struct {
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	Subject       string `json:"subject"`
+}
+
+func (q *Queries) ModifyUserEmail(ctx context.Context, arg ModifyUserEmailParams) error {
+	_, err := q.db.ExecContext(ctx, modifyUserEmail, arg.Email, arg.EmailVerified, arg.Subject)
+	return err
+}
+
+const modifyUserRemoteLogin = `-- name: ModifyUserRemoteLogin :exec
+UPDATE users
+SET login       = ?,
+    profile_url = ?
+WHERE subject = ?
+`
+
+type ModifyUserRemoteLoginParams struct {
+	Login      string `json:"login"`
+	ProfileUrl string `json:"profile_url"`
+	Subject    string `json:"subject"`
+}
+
+func (q *Queries) ModifyUserRemoteLogin(ctx context.Context, arg ModifyUserRemoteLoginParams) error {
+	_, err := q.db.ExecContext(ctx, modifyUserRemoteLogin, arg.Login, arg.ProfileUrl, arg.Subject)
+	return err
+}
+
+const removeUserRoles = `-- name: RemoveUserRoles :exec
+DELETE
+FROM users_roles
+WHERE user_id IN (SELECT id
+                  FROM users
+                  WHERE subject = ?)
+`
+
+func (q *Queries) RemoveUserRoles(ctx context.Context, subject string) error {
+	_, err := q.db.ExecContext(ctx, removeUserRoles, subject)
+	return err
+}
+
+const updateUserToken = `-- name: UpdateUserToken :exec
+UPDATE users
+SET access_token = ?,
+    refresh_token=?,
+    token_expiry = ?
+WHERE subject = ?
+`
+
+type UpdateUserTokenParams struct {
+	AccessToken  sql.NullString `json:"access_token"`
+	RefreshToken sql.NullString `json:"refresh_token"`
+	TokenExpiry  sql.NullTime   `json:"token_expiry"`
+	Subject      string         `json:"subject"`
+}
+
+func (q *Queries) UpdateUserToken(ctx context.Context, arg UpdateUserTokenParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserToken,
+		arg.AccessToken,
+		arg.RefreshToken,
+		arg.TokenExpiry,
+		arg.Subject,
+	)
+	return err
+}
+
 const userEmailExists = `-- name: UserEmailExists :one
 SELECT EXISTS(SELECT 1 FROM users WHERE email = ? AND email_verified = 1) == 1 AS email_exists
 `
@@ -142,4 +277,15 @@ func (q *Queries) UserEmailExists(ctx context.Context, email string) (bool, erro
 	var email_exists bool
 	err := row.Scan(&email_exists)
 	return email_exists, err
+}
+
+const verifyUserEmail = `-- name: VerifyUserEmail :exec
+UPDATE users
+SET email_verified=1
+WHERE subject = ?
+`
+
+func (q *Queries) VerifyUserEmail(ctx context.Context, subject string) error {
+	_, err := q.db.ExecContext(ctx, verifyUserEmail, subject)
+	return err
 }

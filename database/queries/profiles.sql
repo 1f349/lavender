@@ -1,10 +1,17 @@
 -- name: GetProfile :one
-SELECT profiles.*
-FROM profiles
+SELECT subject,
+       name,
+       picture,
+       website,
+       pronouns,
+       birthdate,
+       zone,
+       locale
+FROM users
 WHERE subject = ?;
 
 -- name: ModifyProfile :exec
-UPDATE profiles
+UPDATE users
 SET name       = ?,
     picture    = ?,
     website    = ?,

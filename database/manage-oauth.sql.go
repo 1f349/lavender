@@ -20,14 +20,14 @@ SELECT subject,
        active
 FROM client_store
 WHERE owner_subject = ?
-   OR ? = 1
+   OR CAST(? AS BOOLEAN) = 1
 LIMIT 25 OFFSET ?
 `
 
 type GetAppListParams struct {
-	OwnerSubject string      `json:"owner_subject"`
-	Column2      interface{} `json:"column_2"`
-	Offset       int64       `json:"offset"`
+	OwnerSubject string `json:"owner_subject"`
+	Column2      bool   `json:"column_2"`
+	Offset       int64  `json:"offset"`
 }
 
 type GetAppListRow struct {

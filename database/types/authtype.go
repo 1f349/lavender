@@ -3,7 +3,7 @@ package types
 type AuthType byte
 
 const (
-	AuthTypeBase AuthType = iota
+	AuthTypeLocal AuthType = iota
 	AuthTypeOauth2
 )
 

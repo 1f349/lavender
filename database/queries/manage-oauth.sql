@@ -15,7 +15,7 @@ SELECT subject,
        active
 FROM client_store
 WHERE owner_subject = ?
-   OR ? = 1
+   OR CAST(? AS BOOLEAN) = 1
 LIMIT 25 OFFSET ?;
 
 -- name: InsertClientApp :exec

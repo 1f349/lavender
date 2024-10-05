@@ -2,35 +2,69 @@ package database
 
 import (
 	"context"
+	"github.com/1f349/lavender/database/types"
 	"github.com/1f349/lavender/password"
 	"github.com/google/uuid"
 	"time"
 )
 
-type AddUserParams struct {
-	Name          string    `json:"name"`
-	Subject       string    `json:"subject"`
-	Password      string    `json:"password"`
-	Email         string    `json:"email"`
-	EmailVerified bool      `json:"email_verified"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	Active        bool      `json:"active"`
+type AddLocalUserParams struct {
+	Password       string `json:"password"`
+	Email          string `json:"email"`
+	EmailVerified  bool   `json:"email_verified"`
+	Name           string `json:"name"`
+	Username       string `json:"username"`
+	ChangePassword bool   `json:"change_password"`
 }
 
-func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) (string, error) {
+func (q *Queries) AddLocalUser(ctx context.Context, arg AddLocalUserParams) (string, error) {
 	pwHash, err := password.HashPassword(arg.Password)
 	if err != nil {
 		return "", err
 	}
 	n := time.Now()
 	a := addUserParams{
-		Subject:       uuid.NewString(),
-		Password:      pwHash,
-		Email:         arg.Email,
-		EmailVerified: arg.EmailVerified,
-		UpdatedAt:     n,
-		Registered:    n,
-		Active:        true,
+		Subject:        uuid.NewString(),
+		Password:       pwHash,
+		Email:          arg.Email,
+		EmailVerified:  arg.EmailVerified,
+		UpdatedAt:      n,
+		Registered:     n,
+		Active:         true,
+		Name:           arg.Name,
+		Login:          arg.Username,
+		ChangePassword: arg.ChangePassword,
+		AuthType:       types.AuthTypeLocal,
+		AuthNamespace:  "",
+		AuthUser:       arg.Username,
+	}
+	return a.Subject, q.addUser(ctx, a)
+}
+
+type AddOAuthUserParams struct {
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	Name          string `json:"name"`
+	Username      string `json:"username"`
+	AuthNamespace string `json:"auth_namespace"`
+	AuthUser      string `json:"auth_user"`
+}
+
+func (q *Queries) AddOAuthUser(ctx context.Context, arg AddOAuthUserParams) (string, error) {
+	n := time.Now()
+	a := addUserParams{
+		Subject:        uuid.NewString(),
+		Email:          arg.Email,
+		EmailVerified:  arg.EmailVerified,
+		UpdatedAt:      n,
+		Registered:     n,
+		Active:         true,
+		Name:           arg.Name,
+		Login:          arg.Username,
+		ChangePassword: false,
+		AuthType:       types.AuthTypeOauth2,
+		AuthNamespace:  arg.AuthNamespace,
+		AuthUser:       arg.AuthUser,
 	}
 	return a.Subject, q.addUser(ctx, a)
 }

@@ -21,9 +21,21 @@ CREATE TABLE users
     zone            TEXT     NOT NULL DEFAULT 'UTC',
     locale          TEXT     NOT NULL DEFAULT 'en-US',
 
+    login           TEXT     NOT NULL DEFAULT '',
+    profile_url     TEXT     NOT NULL DEFAULT '',
+
     auth_type       INTEGER  NOT NULL,
     auth_namespace  TEXT     NOT NULL,
-    auth_user       TEXT     NOT NULL
+    auth_user       TEXT     NOT NULL,
+
+    access_token    TEXT     NULL     DEFAULT NULL,
+    refresh_token   TEXT     NULL     DEFAULT NULL,
+    token_expiry    DATETIME NULL     DEFAULT NULL,
+
+    otp_secret      TEXT     NOT NULL DEFAULT '',
+    otp_digits      INTEGER  NOT NULL DEFAULT 0,
+
+    to_delete       BOOLEAN  NOT NULL DEFAULT 0
 );
 
 CREATE INDEX users_subject ON users (subject);
@@ -39,19 +51,10 @@ CREATE TABLE users_roles
     role_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
 
-    FOREIGN KEY (role_id) REFERENCES roles (id),
+    FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE RESTRICT,
     FOREIGN KEY (user_id) REFERENCES users (id),
 
     CONSTRAINT user_role UNIQUE (role_id, user_id)
-);
-
-CREATE TABLE otp
-(
-    subject INTEGER NOT NULL UNIQUE PRIMARY KEY,
-    secret  TEXT    NOT NULL,
-    digits  INTEGER NOT NULL,
-
-    FOREIGN KEY (subject) REFERENCES users (subject)
 );
 
 CREATE TABLE client_store

@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/1f349/lavender"
 	"github.com/1f349/lavender/conf"
+	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/logger"
 	"github.com/1f349/lavender/pages"
+	"github.com/1f349/lavender/role"
 	"github.com/1f349/lavender/server"
 	"github.com/1f349/mjwt"
 	"github.com/charmbracelet/log"
@@ -114,6 +117,10 @@ func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{})
 		logger.Logger.Fatal("Failed to open database", "err", err)
 	}
 
+	if err := checkDbHasUser(db); err != nil {
+		logger.Logger.Fatal("Failed to add initial user", "err", err)
+	}
+
 	if err := pages.LoadPages(wd); err != nil {
 		logger.Logger.Fatal("Failed to load page templates:", err)
 	}
@@ -167,4 +174,46 @@ func (s *serveCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{})
 	_ = srv.Shutdown(context.Background())
 
 	return subcommands.ExitSuccess
+}
+
+func checkDbHasUser(db *database.Queries) error {
+	value, err := db.HasUser(context.Background())
+	if err != nil {
+		return err
+	}
+
+	if !value {
+		logger.Logger.Warn("No users are available, setting up initial admin user")
+
+		ctx := context.Background()
+		err = db.UseTx(ctx, func(tx *database.Queries) error {
+			adminUuid, err := db.AddLocalUser(context.Background(), database.AddLocalUserParams{
+				Password:       "admin",
+				Email:          "admin@localhost",
+				EmailVerified:  false,
+				Name:           "Admin",
+				Username:       "admin",
+				ChangePassword: true,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to add user: %w", err)
+			}
+			roleId, err := db.AddRole(context.Background(), role.LavenderAdmin)
+			if err != nil {
+				return fmt.Errorf("failed to add role: %w", err)
+			}
+			err = db.AddUserRole(context.Background(), database.AddUserRoleParams{
+				RoleID:  roleId,
+				Subject: adminUuid,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to add user role: %w", err)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

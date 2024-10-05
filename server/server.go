@@ -3,17 +3,14 @@ package server
 import (
 	"errors"
 	"github.com/1f349/cache"
-	clientStore "github.com/1f349/lavender/client-store"
 	"github.com/1f349/lavender/conf"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
+	"github.com/1f349/lavender/logger"
 	"github.com/1f349/lavender/pages"
-	scope2 "github.com/1f349/lavender/scope"
 	"github.com/1f349/mjwt"
-	"github.com/go-oauth2/oauth2/v4/generates"
 	"github.com/go-oauth2/oauth2/v4/manage"
 	"github.com/go-oauth2/oauth2/v4/server"
-	"github.com/go-oauth2/oauth2/v4/store"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"net/url"
@@ -76,44 +73,15 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, db *database.Queries, s
 		mailLinkCache: cache.New[mailLinkKey, string](),
 	}
 
-	oauthManager := manage.NewManager()
-	oauthManager.MapAuthorizeGenerate(generates.NewAuthorizeGenerate())
-	oauthManager.SetAuthorizeCodeTokenCfg(manage.DefaultAuthorizeCodeTokenCfg)
-	oauthManager.MustTokenStorage(store.NewMemoryTokenStore())
-	oauthManager.MapAccessGenerate(NewMJWTAccessGenerate(signingKey, db))
-	oauthManager.MapClientStorage(clientStore.New(db))
-
-	oauthSrv := server.NewDefaultServer(oauthManager)
-	oauthSrv.SetClientInfoHandler(func(req *http.Request) (clientID, clientSecret string, err error) {
-		cId, cSecret, err := server.ClientBasicHandler(req)
-		if cId == "" && cSecret == "" {
-			cId, cSecret, err = server.ClientFormHandler(req)
-		}
-		if err != nil {
-			return "", "", err
-		}
-		return cId, cSecret, nil
-	})
-	oauthSrv.SetUserAuthorizationHandler(hs.oauthUserAuthorization)
-	oauthSrv.SetAuthorizeScopeHandler(func(rw http.ResponseWriter, req *http.Request) (scope string, err error) {
-		var form url.Values
-		if req.Method == http.MethodPost {
-			form = req.PostForm
-		} else {
-			form = req.URL.Query()
-		}
-		a := form.Get("scope")
-		if !scope2.ScopesExist(a) {
-			return "", errInvalidScope
-		}
-		return a, nil
-	})
-	addIdTokenSupport(oauthSrv, db, signingKey)
-
-	ssoManager := issuer.NewManager(config.SsoServices)
+	var err error
+	hs.manager, err = issuer.NewManager(config.SsoServices)
+	if err != nil {
+		logger.Logger.Fatal("Failed to load SSO services", "err", err)
+	}
 
 	SetupOpenId(r, config.BaseUrl, signingKey)
-	r.POST("/logout", hs.RequireAuthentication(fu))
+	r.GET("/", hs.OptionalAuthentication(false, hs.Home))
+	r.POST("/logout", hs.RequireAuthentication(hs.logoutPost))
 
 	// theme styles
 	r.GET("/assets/*filepath", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
@@ -126,8 +94,16 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, db *database.Queries, s
 		http.ServeContent(rw, req, path.Base(name), contentCache, out)
 	})
 
-	SetupManageApps(r)
-	SetupManageUsers(r)
+	// login steps
+	r.GET("/login", hs.OptionalAuthentication(false, hs.loginGet))
+	r.POST("/login", hs.OptionalAuthentication(false, hs.loginPost))
+	r.GET("/login/otp", hs.OptionalAuthentication(true, hs.loginOtpGet))
+	r.POST("/login/otp", hs.OptionalAuthentication(true, hs.loginOtpPost))
+	r.GET("/callback", hs.OptionalAuthentication(false, hs.loginCallback))
+
+	SetupManageApps(r, hs)
+	SetupManageUsers(r, hs)
+	SetupOAuth2(r, hs, signingKey, db)
 }
 
 func (h *httpServer) SafeRedirect(rw http.ResponseWriter, req *http.Request) {

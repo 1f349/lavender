@@ -1,21 +1,25 @@
 -- name: SetOtp :exec
-INSERT OR
-REPLACE
-INTO otp (subject, secret, digits)
-VALUES (?, ?, ?);
+UPDATE users
+SET otp_secret = ?,
+    otp_digits=?
+WHERE subject = ?;
 
 -- name: DeleteOtp :exec
-DELETE
-FROM otp
-WHERE otp.subject = ?;
+UPDATE users
+SET otp_secret='',
+    otp_digits=0
+WHERE subject = ?;
 
 -- name: GetOtp :one
-SELECT secret, digits
-FROM otp
+SELECT otp_secret, otp_digits
+FROM users
 WHERE subject = ?;
 
 -- name: HasOtp :one
-SELECT EXISTS(SELECT 1 FROM otp WHERE subject = ?) == 1 as hasOtp;
+SELECT CAST(1 AS BOOLEAN) AS hasOtp
+FROM users
+WHERE subject = ?
+  AND otp_secret != '';
 
 -- name: GetUserEmail :one
 SELECT email

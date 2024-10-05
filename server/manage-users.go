@@ -5,16 +5,22 @@ import (
 	"github.com/1f349/lavender/pages"
 	"github.com/1f349/lavender/role"
 	"github.com/julienschmidt/httprouter"
+	"golang.org/x/sync/errgroup"
 	"net/http"
 	"net/url"
 	"strconv"
 )
 
+func SetupManageUsers(r *httprouter.Router, hs *httpServer) {
+	r.GET("/manage/users", hs.RequireAdminAuthentication(hs.ManageUsersGet))
+	r.POST("/manage/users", hs.RequireAdminAuthentication(hs.ManageUsersPost))
+}
+
 func (h *httpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
 	q := req.URL.Query()
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
-	var roles string
+	var roles []string
 	var userList []database.GetUserListRow
 	if h.DbTx(rw, func(tx *database.Queries) (err error) {
 		roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
@@ -64,7 +70,7 @@ func (h *httpServer) ManageUsersPost(rw http.ResponseWriter, req *http.Request, 
 		return
 	}
 
-	var roles string
+	var roles []string
 	if h.DbTx(rw, func(tx *database.Queries) (err error) {
 		roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
 		return
@@ -78,17 +84,37 @@ func (h *httpServer) ManageUsersPost(rw http.ResponseWriter, req *http.Request, 
 
 	offset := req.Form.Get("offset")
 	action := req.Form.Get("action")
-	newRoles := req.Form.Get("roles")
+	newRoles := req.Form["roles"]
 	active := req.Form.Has("active")
 
 	switch action {
 	case "edit":
 		if h.DbTx(rw, func(tx *database.Queries) error {
 			sub := req.Form.Get("subject")
-			return tx.UpdateUser(req.Context(), database.UpdateUserParams{
-				Active:  active,
-				Roles:   newRoles,
-				Subject: sub,
+			return tx.UseTx(req.Context(), func(tx *database.Queries) (err error) {
+				err = tx.ChangeUserActive(req.Context(), database.ChangeUserActiveParams{Column1: active, Subject: sub})
+				if err != nil {
+					return err
+				}
+				err = tx.RemoveUserRoles(req.Context(), sub)
+				if err != nil {
+					return err
+				}
+				errGrp := new(errgroup.Group)
+				errGrp.SetLimit(3)
+				for _, roleName := range newRoles {
+					errGrp.Go(func() error {
+						roleId, err := strconv.ParseInt(roleName, 10, 64)
+						if err != nil {
+							return err
+						}
+						return tx.AddUserRole(req.Context(), database.AddUserRoleParams{
+							RoleID:  roleId,
+							Subject: sub,
+						})
+					})
+				}
+				return errGrp.Wait()
 			})
 		}) {
 			return

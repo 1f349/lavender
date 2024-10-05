@@ -3,15 +3,11 @@ SELECT count(subject) > 0 AS hasUser
 FROM users;
 
 -- name: addUser :exec
-INSERT INTO users (subject, password, email, email_verified, updated_at, registered, active)
-VALUES (?, ?, ?, ?, ?, ?, ?);
-
--- name: addOAuthUser :exec
-INSERT INTO users (subject, password, email, email_verified, updated_at, registered, active)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO users (subject, password, email, email_verified, updated_at, registered, active, name, login, change_password, auth_type, auth_namespace, auth_user)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: checkLogin :one
-SELECT subject, password, EXISTS(SELECT 1 FROM otp WHERE otp.subject = users.subject) == 1 AS has_otp, email, email_verified
+SELECT subject, password, CAST(otp_secret != '' AS BOOLEAN) AS has_otp, email, email_verified
 FROM users
 WHERE users.subject = ?
 LIMIT 1;
@@ -48,3 +44,9 @@ SET password  = ?,
     updated_at=?
 WHERE subject = ?
   AND password = ?;
+
+-- name: FlagUserAsDeleted :exec
+UPDATE users
+SET active= false,
+    to_delete = true
+WHERE subject = ?;
