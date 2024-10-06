@@ -7,7 +7,7 @@ INSERT INTO users (subject, password, email, email_verified, updated_at, registe
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: checkLogin :one
-SELECT subject, password, CAST(otp_secret != '' AS BOOLEAN) AS has_otp, email, email_verified
+SELECT subject, password, need_factor, email, email_verified
 FROM users
 WHERE users.subject = ?
 LIMIT 1;

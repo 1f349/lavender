@@ -16,15 +16,15 @@ type UserHandler func(rw http.ResponseWriter, req *http.Request, params httprout
 
 type UserAuth struct {
 	Subject  string
-	NeedOtp  bool
+	Factor   auth.Factor
 	UserInfo auth.UserInfoFields
 }
 
 func (u UserAuth) IsGuest() bool { return u.Subject == "" }
 
 func (u UserAuth) NextFlowUrl(origin *url.URL) *url.URL {
-	if u.NeedOtp {
-		return PrepareRedirectUrl("/login/otp", origin)
+	if u.Factor < auth.FactorAuthorized {
+		return PrepareRedirectUrl("/login", origin)
 	}
 	return nil
 }

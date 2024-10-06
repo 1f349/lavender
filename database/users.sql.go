@@ -47,7 +47,7 @@ func (q *Queries) FlagUserAsDeleted(ctx context.Context, subject string) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, subject, password, change_password, email, email_verified, updated_at, registered, active, name, picture, website, pronouns, birthdate, zone, locale, login, profile_url, auth_type, auth_namespace, auth_user, access_token, refresh_token, token_expiry, otp_secret, otp_digits, to_delete
+SELECT id, subject, password, change_password, email, email_verified, updated_at, registered, active, name, picture, website, pronouns, birthdate, zone, locale, login, profile_url, auth_type, auth_namespace, auth_user, access_token, refresh_token, token_expiry, otp_secret, otp_digits, to_delete, need_factor
 FROM users
 WHERE subject = ?
 LIMIT 1
@@ -84,6 +84,7 @@ func (q *Queries) GetUser(ctx context.Context, subject string) (User, error) {
 		&i.OtpSecret,
 		&i.OtpDigits,
 		&i.ToDelete,
+		&i.NeedFactor,
 	)
 	return i, err
 }
@@ -216,7 +217,7 @@ func (q *Queries) changeUserPassword(ctx context.Context, arg changeUserPassword
 }
 
 const checkLogin = `-- name: checkLogin :one
-SELECT subject, password, CAST(otp_secret != '' AS BOOLEAN) AS has_otp, email, email_verified
+SELECT subject, password, need_factor, email, email_verified
 FROM users
 WHERE users.subject = ?
 LIMIT 1
@@ -225,7 +226,7 @@ LIMIT 1
 type checkLoginRow struct {
 	Subject       string              `json:"subject"`
 	Password      password.HashString `json:"password"`
-	HasOtp        bool                `json:"has_otp"`
+	NeedFactor    bool                `json:"need_factor"`
 	Email         string              `json:"email"`
 	EmailVerified bool                `json:"email_verified"`
 }
@@ -236,7 +237,7 @@ func (q *Queries) checkLogin(ctx context.Context, subject string) (checkLoginRow
 	err := row.Scan(
 		&i.Subject,
 		&i.Password,
-		&i.HasOtp,
+		&i.NeedFactor,
 		&i.Email,
 		&i.EmailVerified,
 	)

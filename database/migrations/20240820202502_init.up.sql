@@ -35,7 +35,8 @@ CREATE TABLE users
     otp_secret      TEXT     NOT NULL DEFAULT '',
     otp_digits      INTEGER  NOT NULL DEFAULT 0,
 
-    to_delete       BOOLEAN  NOT NULL DEFAULT 0
+    to_delete       BOOLEAN  NOT NULL DEFAULT 0,
+    need_factor     BOOLEAN  NOT NULL DEFAULT 0
 );
 
 CREATE INDEX users_subject ON users (subject);

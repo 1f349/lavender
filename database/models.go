@@ -58,6 +58,7 @@ type User struct {
 	OtpSecret      string              `json:"otp_secret"`
 	OtpDigits      int64               `json:"otp_digits"`
 	ToDelete       bool                `json:"to_delete"`
+	NeedFactor     bool                `json:"need_factor"`
 }
 
 type UsersRole struct {

@@ -71,7 +71,7 @@ func (q *Queries) AddOAuthUser(ctx context.Context, arg AddOAuthUserParams) (str
 
 type CheckLoginResult struct {
 	Subject       string `json:"subject"`
-	HasOtp        bool   `json:"has_otp"`
+	NeedFactor    bool   `json:"need_factor"`
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
 }
@@ -87,7 +87,7 @@ func (q *Queries) CheckLogin(ctx context.Context, un, pw string) (CheckLoginResu
 	}
 	return CheckLoginResult{
 		Subject:       login.Subject,
-		HasOtp:        login.HasOtp,
+		NeedFactor:    login.NeedFactor,
 		Email:         login.Email,
 		EmailVerified: login.EmailVerified,
 	}, nil
