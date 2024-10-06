@@ -13,6 +13,27 @@ import (
 	"github.com/1f349/lavender/password"
 )
 
+const findUserByAuth = `-- name: FindUserByAuth :one
+SELECT subject
+FROM users
+WHERE auth_type = ?
+  AND auth_namespace = ?
+  AND auth_user = ?
+`
+
+type FindUserByAuthParams struct {
+	AuthType      types.AuthType `json:"auth_type"`
+	AuthNamespace string         `json:"auth_namespace"`
+	AuthUser      string         `json:"auth_user"`
+}
+
+func (q *Queries) FindUserByAuth(ctx context.Context, arg FindUserByAuthParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, findUserByAuth, arg.AuthType, arg.AuthNamespace, arg.AuthUser)
+	var subject string
+	err := row.Scan(&subject)
+	return subject, err
+}
+
 const flagUserAsDeleted = `-- name: FlagUserAsDeleted :exec
 UPDATE users
 SET active= false,

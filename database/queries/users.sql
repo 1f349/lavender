@@ -50,3 +50,10 @@ UPDATE users
 SET active= false,
     to_delete = true
 WHERE subject = ?;
+
+-- name: FindUserByAuth :one
+SELECT subject
+FROM users
+WHERE auth_type = ?
+  AND auth_namespace = ?
+  AND auth_user = ?;

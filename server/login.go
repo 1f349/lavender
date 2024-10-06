@@ -149,72 +149,62 @@ func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellK
 		return UserAuth{}, fmt.Errorf("failed to fetch user info")
 	}
 
-	err = h.DbTxError(func(tx *database.Queries) error {
-		name := sessionData.UserInfo.GetStringOrDefault("name", "Unknown User")
+	// TODO(melon): fix this to use a merging of lavender and tulip auth
 
-		_, err = tx.GetUser(req.Context(), sessionData.Subject)
-		uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
-		uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
-		if errors.Is(err, sql.ErrNoRows) {
-			_, err := tx.AddOAuthUser(req.Context(), database.AddOAuthUserParams{
-				Email:         uEmail,
-				EmailVerified: uEmailVerified,
-				Name:          name,
-				Username:      sessionData.UserInfo.GetStringFromKeysOrEmpty("login", "preferred_username"),
-				AuthNamespace: sso.Namespace,
-				AuthUser:      sessionData.UserInfo.GetStringOrEmpty("sub"),
-			})
-			return err
-		}
-
-		err = tx.ModifyUserEmail(req.Context(), database.ModifyUserEmailParams{
-			Email:         uEmail,
-			EmailVerified: uEmailVerified,
-			Subject:       sessionData.Subject,
-		})
-		if err != nil {
-			return err
-		}
-
-		err = tx.ModifyUserAuth(req.Context(), database.ModifyUserAuthParams{
+	// find an existing user with the matching oauth2 namespace and subject
+	var userSubject string
+	err = h.DbTxError(func(tx *database.Queries) (err error) {
+		userSubject, err = tx.FindUserByAuth(req.Context(), database.FindUserByAuthParams{
 			AuthType:      types.AuthTypeOauth2,
 			AuthNamespace: sso.Namespace,
+			AuthUser:      sessionData.Subject,
+		})
+		return
+	})
+	switch {
+	case err == nil:
+		// user already exists
+		err = h.DbTxError(func(tx *database.Queries) error {
+			return h.updateOAuth2UserProfile(req.Context(), tx, sessionData)
+		})
+		return UserAuth{
+			Subject:  userSubject,
+			NeedOtp:  sessionData.NeedOtp,
+			UserInfo: sessionData.UserInfo,
+		}, err
+	case errors.Is(err, sql.ErrNoRows):
+		// happy path for registration
+		break
+	default:
+		// another error occurred
+		return UserAuth{}, err
+	}
+
+	// guard for disabled registration
+	if !sso.Config.Registration {
+		return UserAuth{}, fmt.Errorf("registration is not enabled for this authentication source")
+	}
+
+	// TODO(melon): rework this
+	name := sessionData.UserInfo.GetStringOrDefault("name", "Unknown User")
+	uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
+	uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
+
+	err = h.DbTxError(func(tx *database.Queries) (err error) {
+		userSubject, err = tx.AddOAuthUser(req.Context(), database.AddOAuthUserParams{
+			Email:         uEmail,
+			EmailVerified: uEmailVerified,
+			Name:          name,
+			Username:      sessionData.UserInfo.GetStringFromKeysOrEmpty("login", "preferred_username"),
+			AuthNamespace: sso.Namespace,
 			AuthUser:      sessionData.UserInfo.GetStringOrEmpty("sub"),
-			Subject:       sessionData.Subject,
 		})
 		if err != nil {
 			return err
 		}
 
-		err = tx.ModifyUserRemoteLogin(req.Context(), database.ModifyUserRemoteLoginParams{
-			Login:      sessionData.UserInfo.GetStringFromKeysOrEmpty("login", "preferred_username"),
-			ProfileUrl: sessionData.UserInfo.GetStringOrEmpty("profile"),
-			Subject:    sessionData.Subject,
-		})
-		if err != nil {
-			return err
-		}
-
-		pronoun, err := pronouns.FindPronoun(sessionData.UserInfo.GetStringOrEmpty("pronouns"))
-		if err != nil {
-			pronoun = pronouns.TheyThem
-		}
-		locale, err := language.Parse(sessionData.UserInfo.GetStringOrEmpty("locale"))
-		if err != nil {
-			locale = language.AmericanEnglish
-		}
-
-		return tx.ModifyProfile(req.Context(), database.ModifyProfileParams{
-			Name:      name,
-			Picture:   sessionData.UserInfo.GetStringOrEmpty("profile"),
-			Website:   sessionData.UserInfo.GetStringOrEmpty("website"),
-			Pronouns:  types.UserPronoun{Pronoun: pronoun},
-			Birthdate: sessionData.UserInfo.GetNullDate("birthdate"),
-			Zone:      sessionData.UserInfo.GetStringOrDefault("zoneinfo", "UTC"),
-			Locale:    types.UserLocale{Tag: locale},
-			UpdatedAt: time.Now(),
-			Subject:   sessionData.Subject,
-		})
+		// if adding the user succeeds then update the profile
+		return h.updateOAuth2UserProfile(req.Context(), tx, sessionData)
 	})
 	if err != nil {
 		return UserAuth{}, err
@@ -232,7 +222,51 @@ func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellK
 		return UserAuth{}, err
 	}
 
+	// TODO(melon): this feels bad
+	sessionData = UserAuth{
+		Subject:  userSubject,
+		NeedOtp:  sessionData.NeedOtp,
+		UserInfo: sessionData.UserInfo,
+	}
+
 	return sessionData, nil
+}
+
+func (h *httpServer) updateOAuth2UserProfile(ctx context.Context, tx *database.Queries, sessionData UserAuth) error {
+	// all of these updates must succeed
+	return tx.UseTx(ctx, func(tx *database.Queries) error {
+		name := sessionData.UserInfo.GetStringOrDefault("name", "Unknown User")
+
+		err := tx.ModifyUserRemoteLogin(ctx, database.ModifyUserRemoteLoginParams{
+			Login:      sessionData.UserInfo.GetStringFromKeysOrEmpty("login", "preferred_username"),
+			ProfileUrl: sessionData.UserInfo.GetStringOrEmpty("profile"),
+			Subject:    sessionData.Subject,
+		})
+		if err != nil {
+			return err
+		}
+
+		pronoun, err := pronouns.FindPronoun(sessionData.UserInfo.GetStringOrEmpty("pronouns"))
+		if err != nil {
+			pronoun = pronouns.TheyThem
+		}
+		locale, err := language.Parse(sessionData.UserInfo.GetStringOrEmpty("locale"))
+		if err != nil {
+			locale = language.AmericanEnglish
+		}
+
+		return tx.ModifyProfile(ctx, database.ModifyProfileParams{
+			Name:      name,
+			Picture:   sessionData.UserInfo.GetStringOrEmpty("profile"),
+			Website:   sessionData.UserInfo.GetStringOrEmpty("website"),
+			Pronouns:  types.UserPronoun{Pronoun: pronoun},
+			Birthdate: sessionData.UserInfo.GetNullDate("birthdate"),
+			Zone:      sessionData.UserInfo.GetStringOrDefault("zoneinfo", "UTC"),
+			Locale:    types.UserLocale{Tag: locale},
+			UpdatedAt: time.Now(),
+			Subject:   sessionData.Subject,
+		})
+	})
 }
 
 const twelveHours = 12 * time.Hour
@@ -257,7 +291,7 @@ func (l lavenderLoginRefresh) Valid() error { return l.RefreshTokenClaims.Valid(
 func (l lavenderLoginRefresh) Type() string { return "lavender-login-refresh" }
 
 func (h *httpServer) setLoginDataCookie2(rw http.ResponseWriter, authData UserAuth) bool {
-	// TODO(melon): should probably merge there methods
+	// TODO(melon): should probably merge these methods
 	return h.setLoginDataCookie(rw, authData, "")
 }
 
@@ -377,7 +411,9 @@ func (h *httpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Toke
 	if !ok {
 		return UserAuth{}, fmt.Errorf("invalid subject")
 	}
-	subject += "@" + sso.Config.Namespace
+
+	// TODO(melon): there is no need for this
+	//subject += "@" + sso.Config.Namespace
 
 	return UserAuth{
 		Subject:  subject,

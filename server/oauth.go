@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	clientStore "github.com/1f349/lavender/client-store"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/logger"
@@ -9,6 +10,8 @@ import (
 	"github.com/1f349/lavender/scope"
 	"github.com/1f349/lavender/utils"
 	"github.com/1f349/mjwt"
+	"github.com/go-oauth2/oauth2/v4"
+	"github.com/go-oauth2/oauth2/v4/errors"
 	"github.com/go-oauth2/oauth2/v4/generates"
 	"github.com/go-oauth2/oauth2/v4/manage"
 	"github.com/go-oauth2/oauth2/v4/server"
@@ -16,12 +19,13 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strings"
 	"time"
 )
 
 func SetupOAuth2(r *httprouter.Router, hs *httpServer, key *mjwt.Issuer, db *database.Queries) {
-	oauthManager := manage.NewManager()
+	oauthManager := manage.NewDefaultManager()
 	oauthManager.MapAuthorizeGenerate(generates.NewAuthorizeGenerate())
 	oauthManager.SetAuthorizeCodeTokenCfg(manage.DefaultAuthorizeCodeTokenCfg)
 	oauthManager.MustTokenStorage(store.NewMemoryTokenStore())
@@ -53,7 +57,19 @@ func SetupOAuth2(r *httprouter.Router, hs *httpServer, key *mjwt.Issuer, db *dat
 		}
 		return a, nil
 	})
+	oauthSrv.ClientAuthorizedHandler = func(clientID string, grant oauth2.GrantType) (allowed bool, err error) {
+		return true, nil
+	}
 	addIdTokenSupport(oauthSrv, db, key)
+	oauthSrv.ResponseErrorHandler = func(re *errors.Response) {
+		buf := make([]byte, 1<<20)
+		n := runtime.Stack(buf, false)
+		fmt.Printf("%#v\n", re)
+		fmt.Printf("%s\n", buf[:n])
+	}
+
+	hs.oauthMgr = oauthManager
+	hs.oauthSrv = oauthSrv
 
 	r.GET("/authorize", hs.RequireAuthentication(hs.authorizeEndpoint))
 	r.POST("/authorize", hs.RequireAuthentication(hs.authorizeEndpoint))
@@ -62,9 +78,11 @@ func SetupOAuth2(r *httprouter.Router, hs *httpServer, key *mjwt.Issuer, db *dat
 			http.Error(rw, "Failed to handle token request", http.StatusInternalServerError)
 		}
 	})
+	r.GET("/userinfo", hs.userInfoRequest)
+	r.OPTIONS("/userinfo", hs.userInfoRequest)
 }
 
-func (h *httpServer) userInfoRequest(rw http.ResponseWriter, req *http.Request) {
+func (h *httpServer) userInfoRequest(rw http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	rw.Header().Set("Access-Control-Allow-Credentials", "true")
 	rw.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type")
 	rw.Header().Set("Access-Control-Allow-Origin", strings.TrimSuffix(req.Referer(), "/"))
@@ -79,12 +97,6 @@ func (h *httpServer) userInfoRequest(rw http.ResponseWriter, req *http.Request) 
 		return
 	}
 	userId := token.GetUserID()
-
-	sso := h.manager.FindServiceFromLogin(userId)
-	if sso == nil {
-		http.Error(rw, "Invalid user", http.StatusBadRequest)
-		return
-	}
 
 	var user database.User
 	if h.DbTx(rw, func(tx *database.Queries) (err error) {

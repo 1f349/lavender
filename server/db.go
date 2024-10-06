@@ -1,13 +1,24 @@
 package server
 
 import (
-	"errors"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/logger"
 	"net/http"
 )
 
-var ErrDatabaseActionFailed = errors.New("database action failed")
+var _ error = (*ErrDatabaseActionFailed)(nil)
+
+type ErrDatabaseActionFailed struct {
+	err error
+}
+
+func (e ErrDatabaseActionFailed) Error() string {
+	return "database action failed: " + e.err.Error()
+}
+
+func (e ErrDatabaseActionFailed) Unwrap() error {
+	return e.err
+}
 
 // DbTx wraps a database transaction with http error messages and a simple action
 // function. If the action function returns an error the transaction will be
@@ -27,7 +38,7 @@ func (h *httpServer) DbTxError(action func(tx *database.Queries) error) error {
 	err := action(h.db)
 	if err != nil {
 		logger.Logger.Warn("Database action error", "err", err)
-		return ErrDatabaseActionFailed
+		return ErrDatabaseActionFailed{err: err}
 	}
 	return nil
 }
