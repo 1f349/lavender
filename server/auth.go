@@ -1,8 +1,11 @@
 package server
 
 import (
+	"database/sql"
 	"errors"
+	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/database"
+	"github.com/1f349/lavender/role"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"net/url"
@@ -12,25 +15,42 @@ import (
 type UserHandler func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth)
 
 type UserAuth struct {
-	Subject     string
-	DisplayName string
-	UserInfo    UserInfoFields
+	Subject  string
+	Factor   auth.Factor
+	UserInfo auth.UserInfoFields
 }
 
 func (u UserAuth) IsGuest() bool { return u.Subject == "" }
 
+func (u UserAuth) NextFlowUrl(origin *url.URL) *url.URL {
+	if u.Factor < auth.FactorAuthorized {
+		return PrepareRedirectUrl("/login", origin)
+	}
+	return nil
+}
+
 var ErrAuthHttpError = errors.New("auth http error")
 
-func (h *HttpServer) RequireAdminAuthentication(next UserHandler) httprouter.Handle {
+func (h *httpServer) RequireAdminAuthentication(next UserHandler) httprouter.Handle {
 	return h.RequireAuthentication(func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
-		var roles string
+		var hasRole bool
 		if h.DbTx(rw, func(tx *database.Queries) (err error) {
-			roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
+			err = tx.UserHasRole(req.Context(), database.UserHasRoleParams{
+				Role:    role.LavenderAdmin,
+				Subject: auth.Subject,
+			})
+			switch {
+			case err == nil:
+				hasRole = true
+			case errors.Is(err, sql.ErrNoRows):
+				hasRole = false
+				err = nil
+			}
 			return
 		}) {
 			return
 		}
-		if !HasRole(roles, "lavender:admin") {
+		if !hasRole {
 			http.Error(rw, "403 Forbidden", http.StatusForbidden)
 			return
 		}
@@ -38,8 +58,8 @@ func (h *HttpServer) RequireAdminAuthentication(next UserHandler) httprouter.Han
 	})
 }
 
-func (h *HttpServer) RequireAuthentication(next UserHandler) httprouter.Handle {
-	return h.OptionalAuthentication(func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
+func (h *httpServer) RequireAuthentication(next UserHandler) httprouter.Handle {
+	return h.OptionalAuthentication(false, func(rw http.ResponseWriter, req *http.Request, params httprouter.Params, auth UserAuth) {
 		if auth.IsGuest() {
 			redirectUrl := PrepareRedirectUrl("/login", req.URL)
 			http.Redirect(rw, req, redirectUrl.String(), http.StatusFound)
@@ -49,20 +69,24 @@ func (h *HttpServer) RequireAuthentication(next UserHandler) httprouter.Handle {
 	})
 }
 
-func (h *HttpServer) OptionalAuthentication(next UserHandler) httprouter.Handle {
+func (h *httpServer) OptionalAuthentication(flowPart bool, next UserHandler) httprouter.Handle {
 	return func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		authUser, err := h.internalAuthenticationHandler(rw, req)
+		authData, err := h.internalAuthenticationHandler(rw, req)
 		if err != nil {
 			if !errors.Is(err, ErrAuthHttpError) {
 				http.Error(rw, err.Error(), http.StatusInternalServerError)
 			}
 			return
 		}
-		next(rw, req, params, authUser)
+		if n := authData.NextFlowUrl(req.URL); n != nil && !flowPart {
+			http.Redirect(rw, req, n.String(), http.StatusFound)
+			return
+		}
+		next(rw, req, params, authData)
 	}
 }
 
-func (h *HttpServer) internalAuthenticationHandler(rw http.ResponseWriter, req *http.Request) (UserAuth, error) {
+func (h *httpServer) internalAuthenticationHandler(rw http.ResponseWriter, req *http.Request) (UserAuth, error) {
 	// Delete previous login data cookie
 	http.SetCookie(rw, &http.Cookie{
 		Name:     "lavender-login-data",

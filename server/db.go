@@ -1,18 +1,29 @@
 package server
 
 import (
-	"errors"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/logger"
 	"net/http"
 )
 
-var ErrDatabaseActionFailed = errors.New("database action failed")
+var _ error = (*ErrDatabaseActionFailed)(nil)
+
+type ErrDatabaseActionFailed struct {
+	err error
+}
+
+func (e ErrDatabaseActionFailed) Error() string {
+	return "database action failed: " + e.err.Error()
+}
+
+func (e ErrDatabaseActionFailed) Unwrap() error {
+	return e.err
+}
 
 // DbTx wraps a database transaction with http error messages and a simple action
 // function. If the action function returns an error the transaction will be
 // rolled back. If there is no error then the transaction is committed.
-func (h *HttpServer) DbTx(rw http.ResponseWriter, action func(tx *database.Queries) error) bool {
+func (h *httpServer) DbTx(rw http.ResponseWriter, action func(tx *database.Queries) error) bool {
 	logger.Logger.Helper()
 	if h.DbTxError(action) != nil {
 		http.Error(rw, "Database error", http.StatusInternalServerError)
@@ -22,12 +33,12 @@ func (h *HttpServer) DbTx(rw http.ResponseWriter, action func(tx *database.Queri
 	return false
 }
 
-func (h *HttpServer) DbTxError(action func(tx *database.Queries) error) error {
+func (h *httpServer) DbTxError(action func(tx *database.Queries) error) error {
 	logger.Logger.Helper()
 	err := action(h.db)
 	if err != nil {
 		logger.Logger.Warn("Database action error", "err", err)
-		return ErrDatabaseActionFailed
+		return ErrDatabaseActionFailed{err: err}
 	}
 	return nil
 }

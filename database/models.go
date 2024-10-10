@@ -7,29 +7,61 @@ package database
 import (
 	"database/sql"
 	"time"
+
+	"github.com/1f349/lavender/database/types"
+	"github.com/1f349/lavender/password"
+	"github.com/hardfinhq/go-date"
 )
 
 type ClientStore struct {
-	Subject string `json:"subject"`
-	Name    string `json:"name"`
-	Secret  string `json:"secret"`
-	Domain  string `json:"domain"`
-	Owner   string `json:"owner"`
-	Perms   string `json:"perms"`
-	Public  bool   `json:"public"`
-	Sso     bool   `json:"sso"`
-	Active  bool   `json:"active"`
+	Subject      string `json:"subject"`
+	Name         string `json:"name"`
+	Secret       string `json:"secret"`
+	Domain       string `json:"domain"`
+	OwnerSubject string `json:"owner_subject"`
+	Perms        string `json:"perms"`
+	Public       bool   `json:"public"`
+	Sso          bool   `json:"sso"`
+	Active       bool   `json:"active"`
+}
+
+type Role struct {
+	ID   int64  `json:"id"`
+	Role string `json:"role"`
 }
 
 type User struct {
-	Subject       string         `json:"subject"`
-	Email         string         `json:"email"`
-	EmailVerified bool           `json:"email_verified"`
-	Roles         string         `json:"roles"`
-	Userinfo      string         `json:"userinfo"`
-	AccessToken   sql.NullString `json:"access_token"`
-	RefreshToken  sql.NullString `json:"refresh_token"`
-	Expiry        sql.NullTime   `json:"expiry"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	Active        bool           `json:"active"`
+	ID             int64               `json:"id"`
+	Subject        string              `json:"subject"`
+	Password       password.HashString `json:"password"`
+	ChangePassword bool                `json:"change_password"`
+	Email          string              `json:"email"`
+	EmailVerified  bool                `json:"email_verified"`
+	UpdatedAt      time.Time           `json:"updated_at"`
+	Registered     time.Time           `json:"registered"`
+	Active         bool                `json:"active"`
+	Name           string              `json:"name"`
+	Picture        string              `json:"picture"`
+	Website        string              `json:"website"`
+	Pronouns       types.UserPronoun   `json:"pronouns"`
+	Birthdate      date.NullDate       `json:"birthdate"`
+	Zone           string              `json:"zone"`
+	Locale         types.UserLocale    `json:"locale"`
+	Login          string              `json:"login"`
+	ProfileUrl     string              `json:"profile_url"`
+	AuthType       types.AuthType      `json:"auth_type"`
+	AuthNamespace  string              `json:"auth_namespace"`
+	AuthUser       string              `json:"auth_user"`
+	AccessToken    sql.NullString      `json:"access_token"`
+	RefreshToken   sql.NullString      `json:"refresh_token"`
+	TokenExpiry    sql.NullTime        `json:"token_expiry"`
+	OtpSecret      string              `json:"otp_secret"`
+	OtpDigits      int64               `json:"otp_digits"`
+	ToDelete       bool                `json:"to_delete"`
+	NeedFactor     bool                `json:"need_factor"`
+}
+
+type UsersRole struct {
+	RoleID int64 `json:"role_id"`
+	UserID int64 `json:"user_id"`
 }

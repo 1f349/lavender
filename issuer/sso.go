@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strings"
 )
 
 var httpGet = http.Get
@@ -17,9 +16,11 @@ var httpGet = http.Get
 // SsoConfig is the base URL for an OAUTH/OPENID/SSO login service
 // The path `/.well-known/openid-configuration` should be available
 type SsoConfig struct {
-	Addr      utils.JsonUrl   `json:"addr"`      // https://login.example.com
-	Namespace string          `json:"namespace"` // example.com
-	Client    SsoConfigClient `json:"client"`
+	Addr            utils.JsonUrl   `json:"addr" yaml:"addr"`           // https://login.example.com
+	Namespace       string          `json:"namespace" yaml:"namespace"` // example.com
+	Registration    bool            `json:"registration" yaml:"registration"`
+	LoginWithButton bool            `json:"login_with_button" yaml:"loginWithButton"`
+	Client          SsoConfigClient `json:"client" yaml:"client"`
 }
 
 type SsoConfigClient struct {
@@ -30,14 +31,10 @@ type SsoConfigClient struct {
 
 func (s SsoConfig) FetchConfig() (*WellKnownOIDC, error) {
 	// generate openid config url
-	u := s.Addr.String()
-	if !strings.HasSuffix(u, "/") {
-		u += "/"
-	}
-	u += ".well-known/openid-configuration"
+	u := s.Addr.JoinPath(".well-known/openid-configuration")
 
 	// fetch metadata
-	get, err := httpGet(u)
+	get, err := httpGet(u.String())
 	if err != nil {
 		return nil, err
 	}
@@ -63,6 +60,7 @@ func (s SsoConfig) FetchConfig() (*WellKnownOIDC, error) {
 }
 
 type WellKnownOIDC struct {
+	Namespace              string        `json:"-"`
 	Config                 SsoConfig     `json:"-"`
 	Issuer                 string        `json:"issuer"`
 	AuthorizationEndpoint  string        `json:"authorization_endpoint"`

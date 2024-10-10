@@ -1,25 +1,16 @@
 package server
 
-import (
-	"bufio"
-	"strings"
-)
-
-func HasRole(roles, test string) bool {
-	sc := bufio.NewScanner(strings.NewReader(roles))
-	sc.Split(bufio.ScanWords)
-	for sc.Scan() {
-		if sc.Text() == test {
+func HasRole(roles []string, test string) bool {
+	for _, role := range roles {
+		if role == test {
 			return true
 		}
 	}
 	return false
 }
 
-func ForEachRole(roles string, next func(role string)) {
-	sc := bufio.NewScanner(strings.NewReader(roles))
-	sc.Split(bufio.ScanWords)
-	for sc.Scan() {
-		next(sc.Text())
+func ForEachRole(roles []string, next func(role string)) {
+	for _, role := range roles {
+		next(role)
 	}
 }

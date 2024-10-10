@@ -1,0 +1,47 @@
+# address to listen on
+listen: ':9090'
+
+# url for absolute links to the login service
+baseUrl: 'http://localhost:9090'
+
+# human-readable service name
+serviceName: 'Example Login'
+
+# name of the login issuer
+issuer: 'id.example.com'
+
+# id of the private key in the keystore
+kid: 'fdd2eb6d-b469-44c8-b15b-495bcf34dae4'
+
+# defines the domain part of login name `user@example.com`
+namespace: 'example.com'
+
+# configure automated emails
+mail:
+  name: 'Example Login'
+  tls: true
+  server: 'smtp.example.com:465'
+  from: 'Example Login <noreply@id.example.com>'
+  username: 'noreply@id.example.com'
+  password: '#####'
+
+# enable local accounts
+localLogin: true
+
+# configure SSO login services
+ssoServices:
+  example.net:
+    addr: 'https://example.net'
+    client:
+      id: 'dcea4be8-dff4-49d2-a5e6-c1b202403714'
+      secret: '#####'
+      scopes:
+        - openid
+        - name
+        - username
+        - profile
+        - email
+        - birthdate
+        - age
+        - zoneinfo
+        - locale

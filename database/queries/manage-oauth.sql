@@ -5,14 +5,21 @@ WHERE subject = ?
 LIMIT 1;
 
 -- name: GetAppList :many
-SELECT subject, name, domain, owner, perms, public, sso, active
+SELECT subject,
+       name,
+       domain,
+       owner_subject,
+       perms,
+       public,
+       sso,
+       active
 FROM client_store
-WHERE owner = ?
-   OR ? = 1
+WHERE owner_subject = ?
+   OR CAST(? AS BOOLEAN) = 1
 LIMIT 25 OFFSET ?;
 
 -- name: InsertClientApp :exec
-INSERT INTO client_store (subject, name, secret, domain, owner, perms, public, sso, active)
+INSERT INTO client_store (subject, name, secret, domain, perms, public, sso, active, owner_subject)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateClientApp :exec
@@ -24,10 +31,10 @@ SET name   = ?,
     sso    = ?,
     active = ?
 WHERE subject = ?
-  AND owner = ?;
+  AND owner_subject = ?;
 
 -- name: ResetClientAppSecret :exec
 UPDATE client_store
 SET secret = ?
 WHERE subject = ?
-  AND owner = ?;
+  AND owner_subject = ?;
