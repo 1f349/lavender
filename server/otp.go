@@ -2,8 +2,8 @@ package server
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
+	auth2 "github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/pages"
 	"github.com/julienschmidt/httprouter"
@@ -15,67 +15,7 @@ import (
 	"time"
 )
 
-func (h *httpServer) loginOtpGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
-	if !auth.NeedOtp {
-		h.SafeRedirect(rw, req)
-		return
-	}
-
-	pages.RenderPageTemplate(rw, "login-otp", map[string]any{
-		"ServiceName": h.conf.ServiceName,
-		"Redirect":    req.URL.Query().Get("redirect"),
-	})
-}
-
-func (h *httpServer) loginOtpPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
-	if !auth.NeedOtp {
-		http.Redirect(rw, req, "/", http.StatusFound)
-		return
-	}
-
-	otpInput := req.FormValue("code")
-	if h.fetchAndValidateOtp(rw, auth.Subject, otpInput) {
-		return
-	}
-
-	auth.NeedOtp = false
-
-	h.setLoginDataCookie2(rw, auth)
-	h.SafeRedirect(rw, req)
-}
-
-func (h *httpServer) fetchAndValidateOtp(rw http.ResponseWriter, sub, code string) bool {
-	var hasOtp bool
-	var otpRow database.GetOtpRow
-	var secret string
-	var digits int64
-	if h.DbTx(rw, func(tx *database.Queries) (err error) {
-		hasOtp, err = tx.HasOtp(context.Background(), sub)
-		if err != nil {
-			return
-		}
-		if hasOtp {
-			otpRow, err = tx.GetOtp(context.Background(), sub)
-			secret = otpRow.OtpSecret
-			digits = otpRow.OtpDigits
-		}
-		return
-	}) {
-		return true
-	}
-
-	if hasOtp {
-		totp := gotp.NewTOTP(secret, int(digits), 30, nil)
-		if !verifyTotp(totp, code) {
-			http.Error(rw, "400 Bad Request: Invalid OTP code", http.StatusBadRequest)
-			return true
-		}
-	}
-
-	return false
-}
-
-func (h *httpServer) editOtpPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) editOtpPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	if req.Method == http.MethodPost && req.FormValue("remove") == "1" {
 		if !req.Form.Has("code") {
 			// render page
@@ -86,7 +26,9 @@ func (h *httpServer) editOtpPost(rw http.ResponseWriter, req *http.Request, _ ht
 		}
 
 		otpInput := req.Form.Get("code")
-		if h.fetchAndValidateOtp(rw, auth.Subject, otpInput) {
+		err := h.authOtp.VerifyOtpCode(req.Context(), auth.Subject, otpInput)
+		if err != nil {
+			http.Error(rw, "Invalid OTP code", http.StatusBadRequest)
 			return
 		}
 

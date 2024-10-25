@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	auth2 "github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/lists"
 	"github.com/1f349/lavender/pages"
@@ -11,7 +12,7 @@ import (
 	"time"
 )
 
-func (h *httpServer) EditGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) EditGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	var user database.User
 
 	if h.DbTx(rw, func(tx *database.Queries) error {
@@ -43,7 +44,7 @@ func (h *httpServer) EditGet(rw http.ResponseWriter, req *http.Request, _ httpro
 		"ListLocale":   lists.ListLocale(),
 	})
 }
-func (h *httpServer) EditPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) EditPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	if req.ParseForm() != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		_, _ = rw.Write([]byte("400 Bad Request\n"))

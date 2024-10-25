@@ -1,6 +1,7 @@
 package server
 
 import (
+	auth2 "github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/pages"
 	"github.com/1f349/lavender/role"
@@ -16,7 +17,7 @@ func SetupManageUsers(r *httprouter.Router, hs *httpServer) {
 	r.POST("/manage/users", hs.RequireAdminAuthentication(hs.ManageUsersPost))
 }
 
-func (h *httpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	q := req.URL.Query()
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
@@ -63,7 +64,7 @@ func (h *httpServer) ManageUsersGet(rw http.ResponseWriter, req *http.Request, _
 	pages.RenderPageTemplate(rw, "manage-users", m)
 }
 
-func (h *httpServer) ManageUsersPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) ManageUsersPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	err := req.ParseForm()
 	if err != nil {
 		http.Error(rw, "400 Bad Request: Failed to parse form", http.StatusBadRequest)

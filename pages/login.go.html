@@ -2,20 +2,60 @@
 <html lang="en">
 <head>
     <title>{{.ServiceName}}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
 {{template "header.go.html" .}}
 <main>
-    <form method="POST" action="/login">
-        <input type="hidden" name="redirect" value="{{.Redirect}}"/>
-        <div>
-            <label for="field_loginname">Login Name:</label>
-            <input type="text" name="loginname" id="field_loginname" required/>
+    {{if eq .Mismatch "1"}}
+        <p>Invalid username or password</p>
+    {{else if eq .Mismatch "2"}}
+        <p>Check your inbox for a verification email</p>
+    {{end}}
+    {{if eq .Source "start"}}
+        <form method="POST" action="/login">
+            <input type="hidden" name="redirect" value="{{.Redirect}}"/>
+            <div>
+                <label for="field_loginname">Login Name:</label>
+                <input type="text" name="loginname" id="field_loginname" required/>
+            </div>
+            <button type="submit">Continue</button>
+        </form>
+        <!--
+        <div style="display: none;">
+            <button id="start-passkey-auth">Sign in with a passkey</button>
         </div>
-        <button type="submit">Continue</button>
-    </form>
+        -->
+        <form method="POST" action="/reset-password">
+            <p>Enter your email address below to receive an email with instructions on how to reset your password.</p>
+            <p>Please note this only works if your email address is already verified.</p>
+            <div>
+                <label for="field_email">Email:</label>
+                <input type="email" name="email" id="field_email" required/>
+            </div>
+            <button type="submit">Send Reset Password Email</button>
+        </form>
+    {{else if eq .Source "password"}}
+        <form method="POST" action="/login">
+            <input type="hidden" name="redirect" value="{{.Redirect}}"/>
+            <input type="hidden" name="loginname" value="{{.LoginName}}"/>
+            <div>
+                <label for="field_password">Password:</label>
+                <input type="password" name="password" id="field_password" autofocus required/>
+            </div>
+            <button type="submit">Login</button>
+        </form>
+    {{else if eq .Source "otp"}}
+        <form method="POST" action="/login/otp" autocomplete="off">
+            <input type="hidden" name="redirect" value="{{.Redirect}}"/>
+            <div>
+                <label for="field_code">OTP Code:</label>
+                <input type="text" name="code" id="field_code" required pattern="[0-9]{6,8}" title="6/7/8 digit one time passcode" autocomplete="off" autofocus aria-autocomplete="none" role="presentation"/>
+            </div>
+            <button type="submit">Login</button>
+        </form>
+    {{end}}
 </main>
 </body>
 </html>

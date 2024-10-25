@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"github.com/1f349/cache"
+	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/conf"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
@@ -30,17 +31,14 @@ type httpServer struct {
 	signingKey *mjwt.Issuer
 	manager    *issuer.Manager
 
-	// flowState contains the
-	flowState *cache.Cache[string, flowStateData]
-
 	// mailLinkCache contains a mapping of verify uuids to user uuids
 	mailLinkCache *cache.Cache[mailLinkKey, string]
-}
 
-type flowStateData struct {
-	loginName string
-	sso       *issuer.WellKnownOIDC
-	redirect  string
+	authBasic *auth.BasicLogin
+	authOtp   *auth.OtpLogin
+	authOAuth *auth.OAuthLogin
+
+	authSources []auth.Provider
 }
 
 type mailLink byte
@@ -62,19 +60,32 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, db *database.Queries, s
 
 	contentCache := time.Now()
 
+	authBasic := &auth.BasicLogin{DB: db}
+	authOtp := &auth.OtpLogin{DB: db}
+	authOAuth := &auth.OAuthLogin{DB: db, BaseUrl: config.BaseUrl}
+	authOAuth.Init()
+
 	hs := &httpServer{
 		r:          r,
 		db:         db,
 		conf:       config,
 		signingKey: signingKey,
 
-		flowState: cache.New[string, flowStateData](),
-
 		mailLinkCache: cache.New[mailLinkKey, string](),
+
+		authBasic: authBasic,
+		authOtp:   authOtp,
+		authOAuth: authOAuth,
+		//authPasskey: &auth.PasskeyLogin{DB: db},
+
+		authSources: []auth.Provider{
+			authBasic,
+			authOtp,
+		},
 	}
 
 	var err error
-	hs.manager, err = issuer.NewManager(config.SsoServices)
+	hs.manager, err = issuer.NewManager(config.Namespace, config.SsoServices)
 	if err != nil {
 		logger.Logger.Fatal("Failed to load SSO services", "err", err)
 	}
@@ -97,8 +108,6 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, db *database.Queries, s
 	// login steps
 	r.GET("/login", hs.OptionalAuthentication(false, hs.loginGet))
 	r.POST("/login", hs.OptionalAuthentication(false, hs.loginPost))
-	r.GET("/login/otp", hs.OptionalAuthentication(true, hs.loginOtpGet))
-	r.POST("/login/otp", hs.OptionalAuthentication(true, hs.loginOtpPost))
 	r.GET("/callback", hs.OptionalAuthentication(false, hs.loginCallback))
 
 	SetupManageApps(r, hs)

@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	auth2 "github.com/1f349/lavender/auth"
 	clientStore "github.com/1f349/lavender/client-store"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/logger"
@@ -150,7 +151,7 @@ func (h *httpServer) userInfoRequest(rw http.ResponseWriter, req *http.Request, 
 	_ = json.NewEncoder(rw).Encode(m)
 }
 
-func (h *httpServer) authorizeEndpoint(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) authorizeEndpoint(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	// function is only called with GET or POST method
 	isPost := req.Method == http.MethodPost
 
@@ -292,7 +293,7 @@ func (h *httpServer) oauthUserAuthorization(rw http.ResponseWriter, req *http.Re
 			return "", err
 		}
 
-		redirectUrl := PrepareRedirectUrl("/login", &url.URL{Path: "/authorize", RawQuery: q.Encode()})
+		redirectUrl := auth2.PrepareRedirectUrl("/login", &url.URL{Path: "/authorize", RawQuery: q.Encode()})
 		http.Redirect(rw, req, redirectUrl.String(), http.StatusFound)
 		return "", nil
 	}

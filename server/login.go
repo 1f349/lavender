@@ -41,7 +41,22 @@ func getUserLoginName(req *http.Request) string {
 	return originUrl.Query().Get("login_name")
 }
 
-func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) testAuthSources(req *http.Request, user *database.User, factor auth2.Factor) map[string]bool {
+	authSource := make(map[string]bool)
+	data := make(map[string]any)
+	for _, i := range h.authSources {
+		// ignore not-supported factors
+		if i.Factor()&factor == 0 {
+			continue
+		}
+		err := i.RenderData(req.Context(), req, user, data)
+		authSource[i.Name()] = err == nil
+		clear(data)
+	}
+	return authSource
+}
+
+func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	if !auth.IsGuest() {
 		h.SafeRedirect(rw, req)
 		return
@@ -49,20 +64,41 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 
 	cookie, err := req.Cookie("lavender-login-name")
 	if err == nil && cookie.Valid() == nil {
+		user, err := h.db.GetUser(req.Context(), auth.Subject)
+		var userPtr *database.User
+		switch {
+		case err == nil:
+			userPtr = &user
+		case errors.Is(err, sql.ErrNoRows):
+			userPtr = nil
+		default:
+			http.Error(rw, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		fmt.Printf("%#v\n", h.testAuthSources(req, userPtr, auth2.FactorFirst))
+
 		pages.RenderPageTemplate(rw, "login-memory", map[string]any{
 			"ServiceName": h.conf.ServiceName,
 			"LoginName":   cookie.Value,
 			"Redirect":    req.URL.Query().Get("redirect"),
+			"Source":      "start",
+			"Auth":        h.testAuthSources(req, userPtr, auth2.FactorFirst),
 		})
 		return
 	}
+
+	// render different page sources
 	pages.RenderPageTemplate(rw, "login", map[string]any{
 		"ServiceName": h.conf.ServiceName,
+		"LoginName":   "",
 		"Redirect":    req.URL.Query().Get("redirect"),
+		"Source":      "start",
+		"Auth":        h.testAuthSources(req, nil, auth2.FactorFirst),
 	})
 }
 
-func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	if !auth.IsGuest() {
 		h.SafeRedirect(rw, req)
 		return
@@ -83,15 +119,29 @@ func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 		return
 	}
 	loginName := req.PostFormValue("loginname")
+
+	// append local namespace if @ is missing
+	n := strings.IndexByte(loginName, '@')
+	if n < 0 {
+		// correct the @ index
+		n = len(loginName)
+		loginName += "@" + h.conf.Namespace
+	}
+
 	login := h.manager.FindServiceFromLogin(loginName)
 	if login == nil {
 		http.Error(rw, "No login service defined for this username", http.StatusBadRequest)
 		return
 	}
+
 	// the @ must exist if the service is defined
-	n := strings.IndexByte(loginName, '@')
 	loginUn := loginName[:n]
 
+	ctx := auth2.WithWellKnown(req.Context(), login)
+	ctx = context.WithValue(ctx, "login_username", loginUn)
+	ctx = context.WithValue(ctx, "login_full", loginName)
+
+	// TODO(melon): only do if remember-me is enabled
 	now := time.Now()
 	future := now.AddDate(1, 0, 0)
 	http.SetCookie(rw, &http.Cookie{
@@ -104,49 +154,36 @@ func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	// save state for use later
-	state := login.Config.Namespace + ":" + uuid.NewString()
-	h.flowState.Set(state, flowStateData{loginName, login, req.PostFormValue("redirect")}, time.Now().Add(15*time.Minute))
+	var redirectError auth2.RedirectError
 
-	// generate oauth2 config and redirect to authorize URL
-	oa2conf := login.OAuth2Config
-	oa2conf.RedirectURL = h.conf.BaseUrl + "/callback"
-	nextUrl := oa2conf.AuthCodeURL(state, oauth2.SetAuthURLParam("login_name", loginUn))
-	http.Redirect(rw, req, nextUrl, http.StatusFound)
+	// if the login is the local server
+	if login == issuer.MeWellKnown {
+		// TODO(melon): work on this
+		err := h.authBasic.AttemptLogin(ctx, req, nil)
+		switch {
+		case errors.As(err, &redirectError):
+			http.Redirect(rw, req, redirectError.Target, redirectError.Code)
+			return
+		}
+		return
+	}
+
+	err := h.authOAuth.AttemptLogin(ctx, req, nil)
+	switch {
+	case errors.As(err, &redirectError):
+		http.Redirect(rw, req, redirectError.Target, redirectError.Code)
+		return
+	}
 }
 
-func (h *httpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, userAuth UserAuth) {
-	flowState, ok := h.flowState.Get(req.FormValue("state"))
-	if !ok {
-		http.Error(rw, "Invalid flow state", http.StatusBadRequest)
-		return
-	}
-	token, err := flowState.sso.OAuth2Config.Exchange(context.Background(), req.FormValue("code"), oauth2.SetAuthURLParam("redirect_uri", h.conf.BaseUrl+"/callback"))
-	if err != nil {
-		http.Error(rw, "Failed to exchange code for token", http.StatusInternalServerError)
-		return
-	}
-
-	userAuth, err = h.updateExternalUserInfo(req, flowState.sso, token)
-	if err != nil {
-		http.Error(rw, "Failed to update external user info", http.StatusInternalServerError)
-		return
-	}
-
-	if h.setLoginDataCookie(rw, userAuth, flowState.loginName) {
-		http.Error(rw, "Failed to save login cookie", http.StatusInternalServerError)
-		return
-	}
-	if flowState.redirect != "" {
-		req.Form.Set("redirect", flowState.redirect)
-	}
-	h.SafeRedirect(rw, req)
+func (h *httpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, userAuth auth2.UserAuth) {
+	h.authOAuth.OAuthCallback(rw, req, h.updateExternalUserInfo, h.setLoginDataCookie, h.SafeRedirect)
 }
 
-func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (UserAuth, error) {
+func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth2.UserAuth, error) {
 	sessionData, err := h.fetchUserInfo(sso, token)
 	if err != nil || sessionData.Subject == "" {
-		return UserAuth{}, fmt.Errorf("failed to fetch user info")
+		return auth2.UserAuth{}, fmt.Errorf("failed to fetch user info")
 	}
 
 	// TODO(melon): fix this to use a merging of lavender and tulip auth
@@ -167,9 +204,9 @@ func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellK
 		err = h.DbTxError(func(tx *database.Queries) error {
 			return h.updateOAuth2UserProfile(req.Context(), tx, sessionData)
 		})
-		return UserAuth{
+		return auth2.UserAuth{
 			Subject:  userSubject,
-			NeedOtp:  sessionData.NeedOtp,
+			Factor:   auth2.FactorAuthorized,
 			UserInfo: sessionData.UserInfo,
 		}, err
 	case errors.Is(err, sql.ErrNoRows):
@@ -177,12 +214,12 @@ func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellK
 		break
 	default:
 		// another error occurred
-		return UserAuth{}, err
+		return auth2.UserAuth{}, err
 	}
 
 	// guard for disabled registration
 	if !sso.Config.Registration {
-		return UserAuth{}, fmt.Errorf("registration is not enabled for this authentication source")
+		return auth2.UserAuth{}, fmt.Errorf("registration is not enabled for this authentication source")
 	}
 
 	// TODO(melon): rework this
@@ -207,7 +244,7 @@ func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellK
 		return h.updateOAuth2UserProfile(req.Context(), tx, sessionData)
 	})
 	if err != nil {
-		return UserAuth{}, err
+		return auth2.UserAuth{}, err
 	}
 
 	// only continues if the above tx succeeds
@@ -219,20 +256,20 @@ func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellK
 			Subject:      sessionData.Subject,
 		})
 	}); err != nil {
-		return UserAuth{}, err
+		return auth2.UserAuth{}, err
 	}
 
 	// TODO(melon): this feels bad
-	sessionData = UserAuth{
+	sessionData = auth2.UserAuth{
 		Subject:  userSubject,
-		NeedOtp:  sessionData.NeedOtp,
+		Factor:   auth2.FactorAuthorized,
 		UserInfo: sessionData.UserInfo,
 	}
 
 	return sessionData, nil
 }
 
-func (h *httpServer) updateOAuth2UserProfile(ctx context.Context, tx *database.Queries, sessionData UserAuth) error {
+func (h *httpServer) updateOAuth2UserProfile(ctx context.Context, tx *database.Queries, sessionData auth2.UserAuth) error {
 	// all of these updates must succeed
 	return tx.UseTx(ctx, func(tx *database.Queries) error {
 		name := sessionData.UserInfo.GetStringOrDefault("name", "Unknown User")
@@ -274,6 +311,7 @@ const oneWeek = 7 * 24 * time.Hour
 
 type lavenderLoginAccess struct {
 	UserInfo auth2.UserInfoFields `json:"user_info"`
+	Factor   auth2.Factor         `json:"factor"`
 	auth.AccessTokenClaims
 }
 
@@ -290,16 +328,12 @@ func (l lavenderLoginRefresh) Valid() error { return l.RefreshTokenClaims.Valid(
 
 func (l lavenderLoginRefresh) Type() string { return "lavender-login-refresh" }
 
-func (h *httpServer) setLoginDataCookie2(rw http.ResponseWriter, authData UserAuth) bool {
-	// TODO(melon): should probably merge these methods
-	return h.setLoginDataCookie(rw, authData, "")
-}
-
-func (h *httpServer) setLoginDataCookie(rw http.ResponseWriter, authData UserAuth, loginName string) bool {
+func (h *httpServer) setLoginDataCookie(rw http.ResponseWriter, authData auth2.UserAuth, loginName string) bool {
 	ps := auth.NewPermStorage()
 	accId := uuid.NewString()
 	gen, err := h.signingKey.GenerateJwt(authData.Subject, accId, jwt.ClaimStrings{h.conf.BaseUrl}, twelveHours, lavenderLoginAccess{
 		UserInfo:          authData.UserInfo,
+		Factor:            authData.Factor,
 		AccessTokenClaims: auth.AccessTokenClaims{Perms: ps},
 	})
 	if err != nil {
@@ -346,19 +380,20 @@ func readJwtCookie[T mjwt.Claims](req *http.Request, cookieName string, signingK
 	return b, nil
 }
 
-func (h *httpServer) readLoginAccessCookie(rw http.ResponseWriter, req *http.Request, u *UserAuth) error {
+func (h *httpServer) readLoginAccessCookie(rw http.ResponseWriter, req *http.Request, u *auth2.UserAuth) error {
 	loginData, err := readJwtCookie[lavenderLoginAccess](req, "lavender-login-access", h.signingKey.KeyStore())
 	if err != nil {
 		return h.readLoginRefreshCookie(rw, req, u)
 	}
-	*u = UserAuth{
+	*u = auth2.UserAuth{
 		Subject:  loginData.Subject,
+		Factor:   loginData.Claims.Factor,
 		UserInfo: loginData.Claims.UserInfo,
 	}
 	return nil
 }
 
-func (h *httpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Request, userAuth *UserAuth) error {
+func (h *httpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Request, userAuth *auth2.UserAuth) error {
 	refreshData, err := readJwtCookie[lavenderLoginRefresh](req, "lavender-login-refresh", h.signingKey.KeyStore())
 	if err != nil {
 		return err
@@ -396,27 +431,28 @@ func (h *httpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Re
 	return nil
 }
 
-func (h *httpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (UserAuth, error) {
+func (h *httpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth2.UserAuth, error) {
 	res, err := sso.OAuth2Config.Client(context.Background(), token).Get(sso.UserInfoEndpoint)
 	if err != nil || res.StatusCode != http.StatusOK {
-		return UserAuth{}, fmt.Errorf("request failed")
+		return auth2.UserAuth{}, fmt.Errorf("request failed")
 	}
 	defer res.Body.Close()
 
 	var userInfoJson auth2.UserInfoFields
 	if err := json.NewDecoder(res.Body).Decode(&userInfoJson); err != nil {
-		return UserAuth{}, err
+		return auth2.UserAuth{}, err
 	}
 	subject, ok := userInfoJson.GetString("sub")
 	if !ok {
-		return UserAuth{}, fmt.Errorf("invalid subject")
+		return auth2.UserAuth{}, fmt.Errorf("invalid subject")
 	}
 
 	// TODO(melon): there is no need for this
 	//subject += "@" + sso.Config.Namespace
 
-	return UserAuth{
+	return auth2.UserAuth{
 		Subject:  subject,
+		Factor:   auth2.FactorAuthorized,
 		UserInfo: userInfoJson,
 	}, nil
 }

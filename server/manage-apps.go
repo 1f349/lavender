@@ -1,6 +1,7 @@
 package server
 
 import (
+	auth2 "github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/pages"
 	"github.com/1f349/lavender/password"
@@ -18,7 +19,7 @@ func SetupManageApps(r *httprouter.Router, hs *httpServer) {
 	r.POST("/manage/apps", hs.RequireAuthentication(hs.ManageAppsPost))
 }
 
-func (h *httpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	q := req.URL.Query()
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
@@ -66,7 +67,7 @@ func (h *httpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ 
 	pages.RenderPageTemplate(rw, "manage-apps", m)
 }
 
-func (h *httpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	var roles []string
 	if h.DbTx(rw, func(tx *database.Queries) (err error) {
 		roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
@@ -85,7 +86,7 @@ func (h *httpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Reque
 	pages.RenderPageTemplate(rw, "manage-apps-create", m)
 }
 
-func (h *httpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	err := req.ParseForm()
 	if err != nil {
 		http.Error(rw, "400 Bad Request: Failed to parse form", http.StatusBadRequest)

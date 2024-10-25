@@ -8,15 +8,18 @@ import (
 
 var isValidNamespace = regexp.MustCompile("^[0-9a-z.]+$")
 
+var MeWellKnown = &WellKnownOIDC{}
+
 type Manager struct {
 	m map[string]*WellKnownOIDC
 }
 
-func NewManager(services map[string]SsoConfig) (*Manager, error) {
+func NewManager(myNamespace string, services []SsoConfig) (*Manager, error) {
 	l := &Manager{m: make(map[string]*WellKnownOIDC)}
-	for namespace, ssoService := range services {
-		if !isValidNamespace.MatchString(namespace) {
-			return nil, fmt.Errorf("invalid namespace: %s", namespace)
+	l.m[myNamespace] = MeWellKnown
+	for _, ssoService := range services {
+		if !isValidNamespace.MatchString(ssoService.Namespace) {
+			return nil, fmt.Errorf("invalid namespace: %s", ssoService.Namespace)
 		}
 
 		conf, err := ssoService.FetchConfig()
@@ -25,8 +28,7 @@ func NewManager(services map[string]SsoConfig) (*Manager, error) {
 		}
 
 		// save by namespace
-		conf.Namespace = namespace
-		l.m[namespace] = conf
+		l.m[ssoService.Namespace] = conf
 	}
 	return l, nil
 }

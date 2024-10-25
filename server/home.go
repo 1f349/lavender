@@ -1,6 +1,7 @@
 package server
 
 import (
+	auth2 "github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/pages"
 	"github.com/1f349/lavender/role"
@@ -10,7 +11,7 @@ import (
 	"time"
 )
 
-func (h *httpServer) Home(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) Home(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	rw.Header().Set("Content-Type", "text/html")
 	lNonce := uuid.NewString()
 	http.SetCookie(rw, &http.Cookie{

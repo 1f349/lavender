@@ -11,10 +11,10 @@ import (
 type Factor byte
 
 const (
-	FactorFirst Factor = 1 << iota
-	FactorSecond
 	// FactorAuthorized defines the "authorized" state of a session
-	FactorAuthorized
+	FactorAuthorized Factor = iota
+	FactorFirst
+	FactorSecond
 )
 
 type Provider interface {
@@ -32,14 +32,14 @@ type Provider interface {
 	AttemptLogin(ctx context.Context, req *http.Request, user *database.User) error
 }
 
-// ErrRequiresSecondFactor notifies the ServeHTTP function to ask for another factor
-var ErrRequiresSecondFactor = errors.New("requires second factor")
-
-// ErrRequiresPreviousFactor is a generic error for providers which require a previous factor
-var ErrRequiresPreviousFactor = errors.New("requires previous factor")
-
-// ErrUserDoesNotSupportFactor is a generic error for providers with are unable to support the user
-var ErrUserDoesNotSupportFactor = errors.New("user does not support factor")
+var (
+	// ErrRequiresSecondFactor notifies the ServeHTTP function to ask for another factor
+	ErrRequiresSecondFactor = errors.New("requires second factor")
+	// ErrRequiresPreviousFactor is a generic error for providers which require a previous factor
+	ErrRequiresPreviousFactor = errors.New("requires previous factor")
+	// ErrUserDoesNotSupportFactor is a generic error for providers with are unable to support the user
+	ErrUserDoesNotSupportFactor = errors.New("user does not support factor")
+)
 
 type UserSafeError struct {
 	Display  string
@@ -69,6 +69,17 @@ func AdminSafeError(inner error) UserSafeError {
 		Display:  "Internal server error",
 		Internal: inner,
 	}
+}
+
+type RedirectError struct {
+	Target string
+	Code   int
+}
+
+func (e RedirectError) TargetUrl() string { return e.Target }
+
+func (e RedirectError) Error() string {
+	return fmt.Sprintf("redirect to '%s'", e.Target)
 }
 
 type lookupUserDB interface {

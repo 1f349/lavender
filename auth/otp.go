@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"github.com/1f349/lavender/database"
 	"github.com/xlzd/gotp"
 	"net/http"
@@ -13,24 +14,21 @@ func isDigitsSupported(digits int64) bool {
 }
 
 type otpLoginDB interface {
-	lookupUserDB
-	CheckLogin(ctx context.Context, un, pw string) (database.CheckLoginResult, error)
+	GetOtp(ctx context.Context, subject string) (database.GetOtpRow, error)
 }
 
 var _ Provider = (*OtpLogin)(nil)
 
 type OtpLogin struct {
-	db otpLoginDB
+	DB otpLoginDB
 }
 
-func (b *OtpLogin) Factor() Factor {
-	return FactorSecond
-}
+func (o *OtpLogin) Factor() Factor { return FactorSecond }
 
-func (b *OtpLogin) Name() string { return "basic" }
+func (o *OtpLogin) Name() string { return "basic" }
 
-func (b *OtpLogin) RenderData(_ context.Context, _ *http.Request, user *database.User, data map[string]any) error {
-	if user.Subject == "" {
+func (o *OtpLogin) RenderData(_ context.Context, _ *http.Request, user *database.User, data map[string]any) error {
+	if user == nil || user.Subject == "" {
 		return ErrRequiresPreviousFactor
 	}
 	if user.OtpSecret == "" || !isDigitsSupported(user.OtpDigits) {
@@ -41,7 +39,7 @@ func (b *OtpLogin) RenderData(_ context.Context, _ *http.Request, user *database
 	return nil
 }
 
-func (b *OtpLogin) AttemptLogin(ctx context.Context, req *http.Request, user *database.User) error {
+func (o *OtpLogin) AttemptLogin(ctx context.Context, req *http.Request, user *database.User) error {
 	if user == nil || user.Subject == "" {
 		return ErrRequiresPreviousFactor
 	}
@@ -51,11 +49,28 @@ func (b *OtpLogin) AttemptLogin(ctx context.Context, req *http.Request, user *da
 
 	code := req.FormValue("code")
 
-	totp := gotp.NewTOTP(user.OtpSecret, int(user.OtpDigits), 30, nil)
-	if !verifyTotp(totp, code) {
+	if !validateTotp(user.OtpSecret, int(user.OtpDigits), code) {
 		return BasicUserSafeError(http.StatusBadRequest, "invalid OTP code")
 	}
 	return nil
+}
+
+var ErrInvalidOtpCode = errors.New("invalid OTP code")
+
+func (o *OtpLogin) VerifyOtpCode(ctx context.Context, subject, code string) error {
+	otp, err := o.DB.GetOtp(ctx, subject)
+	if err != nil {
+		return err
+	}
+	if !validateTotp(otp.OtpSecret, int(otp.OtpDigits), code) {
+		return ErrInvalidOtpCode
+	}
+	return nil
+}
+
+func validateTotp(secret string, digits int, code string) bool {
+	totp := gotp.NewTOTP(secret, int(digits), 30, nil)
+	return verifyTotp(totp, code)
 }
 
 func verifyTotp(totp *gotp.TOTP, code string) bool {
