@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <title>{{.ServiceName}}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
@@ -18,6 +18,23 @@
         <div>
             <form method="GET" action="/manage/users">
                 <button type="submit">Manage Users</button>
+            </form>
+        </div>
+    {{end}}
+    {{if .OtpEnabled}}
+        <div>
+            <form method="POST" action="/edit/otp">
+                <input type="hidden" name="remove" value="1"/>
+                <button type="submit">Remove OTP</button>
+            </form>
+        </div>
+    {{else}}
+        <div>
+            <form method="POST" action="/edit/otp">
+                <label><input type="radio" name="digits" value="6"/> 6 digits</label>
+                <label><input type="radio" name="digits" value="7"/> 7 digits</label>
+                <label><input type="radio" name="digits" value="8"/> 8 digits</label>
+                <button type="submit">Change OTP</button>
             </form>
         </div>
     {{end}}

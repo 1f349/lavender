@@ -10,32 +10,39 @@ import (
 )
 
 const getAppList = `-- name: GetAppList :many
-SELECT subject, name, domain, owner, perms, public, sso, active
+SELECT subject,
+       name,
+       domain,
+       owner_subject,
+       perms,
+       public,
+       sso,
+       active
 FROM client_store
-WHERE owner = ?
-   OR ? = 1
+WHERE owner_subject = ?
+   OR CAST(? AS BOOLEAN) = 1
 LIMIT 25 OFFSET ?
 `
 
 type GetAppListParams struct {
-	Owner   string      `json:"owner"`
-	Column2 interface{} `json:"column_2"`
-	Offset  int64       `json:"offset"`
+	OwnerSubject string `json:"owner_subject"`
+	Column2      bool   `json:"column_2"`
+	Offset       int64  `json:"offset"`
 }
 
 type GetAppListRow struct {
-	Subject string `json:"subject"`
-	Name    string `json:"name"`
-	Domain  string `json:"domain"`
-	Owner   string `json:"owner"`
-	Perms   string `json:"perms"`
-	Public  bool   `json:"public"`
-	Sso     bool   `json:"sso"`
-	Active  bool   `json:"active"`
+	Subject      string `json:"subject"`
+	Name         string `json:"name"`
+	Domain       string `json:"domain"`
+	OwnerSubject string `json:"owner_subject"`
+	Perms        string `json:"perms"`
+	Public       bool   `json:"public"`
+	Sso          bool   `json:"sso"`
+	Active       bool   `json:"active"`
 }
 
 func (q *Queries) GetAppList(ctx context.Context, arg GetAppListParams) ([]GetAppListRow, error) {
-	rows, err := q.db.QueryContext(ctx, getAppList, arg.Owner, arg.Column2, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, getAppList, arg.OwnerSubject, arg.Column2, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +54,7 @@ func (q *Queries) GetAppList(ctx context.Context, arg GetAppListParams) ([]GetAp
 			&i.Subject,
 			&i.Name,
 			&i.Domain,
-			&i.Owner,
+			&i.OwnerSubject,
 			&i.Perms,
 			&i.Public,
 			&i.Sso,
@@ -67,7 +74,7 @@ func (q *Queries) GetAppList(ctx context.Context, arg GetAppListParams) ([]GetAp
 }
 
 const getClientInfo = `-- name: GetClientInfo :one
-SELECT subject, name, secret, domain, owner, perms, public, sso, active
+SELECT subject, name, secret, domain, owner_subject, perms, public, sso, active
 FROM client_store
 WHERE subject = ?
 LIMIT 1
@@ -81,7 +88,7 @@ func (q *Queries) GetClientInfo(ctx context.Context, subject string) (ClientStor
 		&i.Name,
 		&i.Secret,
 		&i.Domain,
-		&i.Owner,
+		&i.OwnerSubject,
 		&i.Perms,
 		&i.Public,
 		&i.Sso,
@@ -91,20 +98,20 @@ func (q *Queries) GetClientInfo(ctx context.Context, subject string) (ClientStor
 }
 
 const insertClientApp = `-- name: InsertClientApp :exec
-INSERT INTO client_store (subject, name, secret, domain, owner, perms, public, sso, active)
+INSERT INTO client_store (subject, name, secret, domain, perms, public, sso, active, owner_subject)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertClientAppParams struct {
-	Subject string `json:"subject"`
-	Name    string `json:"name"`
-	Secret  string `json:"secret"`
-	Domain  string `json:"domain"`
-	Owner   string `json:"owner"`
-	Perms   string `json:"perms"`
-	Public  bool   `json:"public"`
-	Sso     bool   `json:"sso"`
-	Active  bool   `json:"active"`
+	Subject      string `json:"subject"`
+	Name         string `json:"name"`
+	Secret       string `json:"secret"`
+	Domain       string `json:"domain"`
+	Perms        string `json:"perms"`
+	Public       bool   `json:"public"`
+	Sso          bool   `json:"sso"`
+	Active       bool   `json:"active"`
+	OwnerSubject string `json:"owner_subject"`
 }
 
 func (q *Queries) InsertClientApp(ctx context.Context, arg InsertClientAppParams) error {
@@ -113,11 +120,11 @@ func (q *Queries) InsertClientApp(ctx context.Context, arg InsertClientAppParams
 		arg.Name,
 		arg.Secret,
 		arg.Domain,
-		arg.Owner,
 		arg.Perms,
 		arg.Public,
 		arg.Sso,
 		arg.Active,
+		arg.OwnerSubject,
 	)
 	return err
 }
@@ -126,17 +133,17 @@ const resetClientAppSecret = `-- name: ResetClientAppSecret :exec
 UPDATE client_store
 SET secret = ?
 WHERE subject = ?
-  AND owner = ?
+  AND owner_subject = ?
 `
 
 type ResetClientAppSecretParams struct {
-	Secret  string `json:"secret"`
-	Subject string `json:"subject"`
-	Owner   string `json:"owner"`
+	Secret       string `json:"secret"`
+	Subject      string `json:"subject"`
+	OwnerSubject string `json:"owner_subject"`
 }
 
 func (q *Queries) ResetClientAppSecret(ctx context.Context, arg ResetClientAppSecretParams) error {
-	_, err := q.db.ExecContext(ctx, resetClientAppSecret, arg.Secret, arg.Subject, arg.Owner)
+	_, err := q.db.ExecContext(ctx, resetClientAppSecret, arg.Secret, arg.Subject, arg.OwnerSubject)
 	return err
 }
 
@@ -149,19 +156,19 @@ SET name   = ?,
     sso    = ?,
     active = ?
 WHERE subject = ?
-  AND owner = ?
+  AND owner_subject = ?
 `
 
 type UpdateClientAppParams struct {
-	Name    string `json:"name"`
-	Domain  string `json:"domain"`
-	Column3 bool   `json:"column_3"`
-	Perms   string `json:"perms"`
-	Public  bool   `json:"public"`
-	Sso     bool   `json:"sso"`
-	Active  bool   `json:"active"`
-	Subject string `json:"subject"`
-	Owner   string `json:"owner"`
+	Name         string `json:"name"`
+	Domain       string `json:"domain"`
+	Column3      bool   `json:"column_3"`
+	Perms        string `json:"perms"`
+	Public       bool   `json:"public"`
+	Sso          bool   `json:"sso"`
+	Active       bool   `json:"active"`
+	Subject      string `json:"subject"`
+	OwnerSubject string `json:"owner_subject"`
 }
 
 func (q *Queries) UpdateClientApp(ctx context.Context, arg UpdateClientAppParams) error {
@@ -174,7 +181,7 @@ func (q *Queries) UpdateClientApp(ctx context.Context, arg UpdateClientAppParams
 		arg.Sso,
 		arg.Active,
 		arg.Subject,
-		arg.Owner,
+		arg.OwnerSubject,
 	)
 	return err
 }

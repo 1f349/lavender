@@ -26,13 +26,14 @@ func TestManager_CheckNamespace(t *testing.T) {
 	httpGet = func(url string) (resp *http.Response, err error) {
 		return &http.Response{StatusCode: http.StatusOK, Body: testBody()}, nil
 	}
-	manager, err := NewManager([]SsoConfig{
+	manager, err := NewManager("example.org", []SsoConfig{
 		{
 			Addr:      testAddrUrl,
 			Namespace: "example.com",
 		},
 	})
 	assert.NoError(t, err)
+	assert.True(t, manager.CheckNamespace("example.org"))
 	assert.True(t, manager.CheckNamespace("example.com"))
 	assert.False(t, manager.CheckNamespace("missing.example.com"))
 }
@@ -41,13 +42,14 @@ func TestManager_FindServiceFromLogin(t *testing.T) {
 	httpGet = func(url string) (resp *http.Response, err error) {
 		return &http.Response{StatusCode: http.StatusOK, Body: testBody()}, nil
 	}
-	manager, err := NewManager([]SsoConfig{
+	manager, err := NewManager("example.org", []SsoConfig{
 		{
 			Addr:      testAddrUrl,
 			Namespace: "example.com",
 		},
 	})
 	assert.NoError(t, err)
+	assert.Equal(t, manager.FindServiceFromLogin("jane@example.org"), MeWellKnown)
 	assert.Equal(t, manager.FindServiceFromLogin("jane@example.com"), manager.m["example.com"])
 	assert.Nil(t, manager.FindServiceFromLogin("jane@missing.example.com"))
 }

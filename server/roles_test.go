@@ -6,7 +6,6 @@ import (
 )
 
 func TestHasRole(t *testing.T) {
-	assert.True(t, HasRole("lavender:admin test:something-else", "lavender:admin"))
-	assert.False(t, HasRole("lavender:admin,test:something-else", "lavender:admin"))
-	assert.False(t, HasRole("lavender: test:something-else", "lavender:admin"))
+	assert.True(t, HasRole([]string{"lavender:admin", "test:something-else"}, "lavender:admin"))
+	assert.False(t, HasRole([]string{"lavender:", "test:something-else"}, "lavender:admin"))
 }

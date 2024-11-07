@@ -33,7 +33,7 @@
                     parseInt(window.location.hash.replace(/^.*expires_in=([^&]+).*$/, '$1'))
                 );
             }
-            if (window.location.search.indexOf('error=')) {
+            if (window.location.hash.indexOf('error=')) {
                 window.opener.POP2.receiveToken('ERROR');
             }
         }

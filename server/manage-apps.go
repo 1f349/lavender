@@ -1,9 +1,11 @@
 package server
 
 import (
+	auth2 "github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/pages"
 	"github.com/1f349/lavender/password"
+	"github.com/1f349/lavender/role"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
@@ -11,11 +13,17 @@ import (
 	"strconv"
 )
 
-func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func SetupManageApps(r *httprouter.Router, hs *httpServer) {
+	r.GET("/manage/apps", hs.RequireAuthentication(hs.ManageAppsGet))
+	r.GET("/manage/apps/create", hs.RequireAuthentication(hs.ManageAppsCreateGet))
+	r.POST("/manage/apps", hs.RequireAuthentication(hs.ManageAppsPost))
+}
+
+func (h *httpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	q := req.URL.Query()
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
-	var roles string
+	var roles []string
 	var appList []database.GetAppListRow
 	if h.DbTx(rw, func(tx *database.Queries) (err error) {
 		roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
@@ -23,9 +31,9 @@ func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ 
 			return
 		}
 		appList, err = tx.GetAppList(req.Context(), database.GetAppListParams{
-			Owner:   auth.Subject,
-			Column2: HasRole(roles, "lavender:admin"),
-			Offset:  int64(offset),
+			OwnerSubject: auth.Subject,
+			Column2:      HasRole(roles, role.LavenderAdmin),
+			Offset:       int64(offset),
 		})
 		return
 	}) {
@@ -59,8 +67,8 @@ func (h *HttpServer) ManageAppsGet(rw http.ResponseWriter, req *http.Request, _ 
 	pages.RenderPageTemplate(rw, "manage-apps", m)
 }
 
-func (h *HttpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
-	var roles string
+func (h *httpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
+	var roles []string
 	if h.DbTx(rw, func(tx *database.Queries) (err error) {
 		roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
 		return
@@ -70,7 +78,7 @@ func (h *HttpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Reque
 
 	m := map[string]any{
 		"ServiceName": h.conf.ServiceName,
-		"IsAdmin":     HasRole(roles, "lavender:admin"),
+		"IsAdmin":     HasRole(roles, role.LavenderAdmin),
 	}
 
 	rw.Header().Set("Content-Type", "text/html")
@@ -78,7 +86,7 @@ func (h *HttpServer) ManageAppsCreateGet(rw http.ResponseWriter, req *http.Reque
 	pages.RenderPageTemplate(rw, "manage-apps-create", m)
 }
 
-func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth UserAuth) {
+func (h *httpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth auth2.UserAuth) {
 	err := req.ParseForm()
 	if err != nil {
 		http.Error(rw, "400 Bad Request: Failed to parse form", http.StatusBadRequest)
@@ -95,7 +103,7 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 	active := req.Form.Has("active")
 
 	if sso || hasPerms {
-		var roles string
+		var roles []string
 		if h.DbTx(rw, func(tx *database.Queries) (err error) {
 			roles, err = tx.GetUserRoles(req.Context(), auth.Subject)
 			return
@@ -120,15 +128,15 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 				return err
 			}
 			return tx.InsertClientApp(req.Context(), database.InsertClientAppParams{
-				Subject: uuid.NewString(),
-				Name:    name,
-				Secret:  secret,
-				Domain:  domain,
-				Owner:   auth.Subject,
-				Perms:   perms,
-				Public:  public,
-				Sso:     sso,
-				Active:  active,
+				Subject:      uuid.NewString(),
+				Name:         name,
+				Secret:       secret,
+				Domain:       domain,
+				OwnerSubject: auth.Subject,
+				Perms:        perms,
+				Public:       public,
+				Sso:          sso,
+				Active:       active,
 			})
 		}) {
 			return
@@ -136,15 +144,15 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 	case "edit":
 		if h.DbTx(rw, func(tx *database.Queries) error {
 			return tx.UpdateClientApp(req.Context(), database.UpdateClientAppParams{
-				Name:    name,
-				Domain:  domain,
-				Column3: hasPerms,
-				Perms:   perms,
-				Public:  public,
-				Sso:     sso,
-				Active:  active,
-				Subject: req.FormValue("subject"),
-				Owner:   auth.Subject,
+				Name:         name,
+				Domain:       domain,
+				Column3:      hasPerms,
+				Perms:        perms,
+				Public:       public,
+				Sso:          sso,
+				Active:       active,
+				Subject:      req.FormValue("subject"),
+				OwnerSubject: auth.Subject,
 			})
 		}) {
 			return
@@ -163,9 +171,9 @@ func (h *HttpServer) ManageAppsPost(rw http.ResponseWriter, req *http.Request, _
 				return err
 			}
 			err = tx.ResetClientAppSecret(req.Context(), database.ResetClientAppSecretParams{
-				Secret:  secret,
-				Subject: sub,
-				Owner:   auth.Subject,
+				Secret:       secret,
+				Subject:      sub,
+				OwnerSubject: auth.Subject,
 			})
 			return err
 		}) {
