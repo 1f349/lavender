@@ -80,13 +80,14 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 
 	cookie, err := req.Cookie("lavender-login-name")
 	if err == nil && cookie.Valid() == nil {
-		user, err := h.db.GetUser(req.Context(), userAuth.Subject)
-		var userPtr *database.User
+		loginName := cookie.Value
+
+		_, err := h.db.GetUser(req.Context(), userAuth.Subject)
 		switch {
 		case err == nil:
-			userPtr = &user
+			break
 		case errors.Is(err, sql.ErrNoRows):
-			userPtr = nil
+			loginName = ""
 		default:
 			http.Error(rw, "Internal server error", http.StatusInternalServerError)
 			return
@@ -94,7 +95,7 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 
 		web.RenderPageTemplate(rw, "login-memory", map[string]any{
 			"ServiceName": h.conf.ServiceName,
-			"LoginName":   cookie.Value,
+			"LoginName":   loginName,
 			"Redirect":    req.URL.Query().Get("redirect"),
 			"Source":      "start",
 		})
@@ -140,7 +141,6 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 		"LoginName":    "",
 		"Redirect":     req.URL.Query().Get("redirect"),
 		"Source":       "start",
-		"Auth":         h.testAuthSources(req, nil, auth.StateUnauthorized),
 		"AuthTemplate": renderTemplate,
 		"AuthButtons":  buttonTemplates,
 	})
