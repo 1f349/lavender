@@ -4,25 +4,22 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
 	"github.com/1f349/lavender/auth/providers"
 	"github.com/1f349/lavender/database"
-	"github.com/1f349/lavender/database/types"
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/logger"
+	"github.com/1f349/lavender/utils"
 	"github.com/1f349/lavender/web"
 	"github.com/1f349/mjwt"
 	mjwtAuth "github.com/1f349/mjwt/auth"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
-	"github.com/mrmelon54/pronouns"
 	"golang.org/x/oauth2"
-	"golang.org/x/text/language"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -72,7 +69,7 @@ func (h *httpServer) renderAuthTemplate(req *http.Request, provider auth.Form) (
 
 func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, userAuth auth.UserAuth) {
 	if !userAuth.IsGuest() {
-		h.SafeRedirect(rw, req)
+		utils.SafeRedirect(rw, req)
 		return
 	}
 
@@ -148,7 +145,7 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 
 func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, auth2 auth.UserAuth) {
 	if !auth2.IsGuest() {
-		h.SafeRedirect(rw, req)
+		utils.SafeRedirect(rw, req)
 		return
 	}
 
@@ -222,9 +219,27 @@ func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 		return
 	}
 
+	var authForm auth.Form
+
+	{
+		for _, i := range h.authSources {
+			if form, ok := i.(auth.Form); ok {
+				if req.PostFormValue("provider") == form.Name() {
+					authForm = form
+					break
+				}
+			}
+		}
+	}
+
+	if authForm == nil {
+		http.Error(rw, "Invalid auth provider", http.StatusBadRequest)
+		return
+	}
+
 	// TODO: rewrite
-	//err := h.authOAuth.AttemptLogin(ctx, req, nil)
-	var err error
+	formContext := authContext.NewFormContext(req, nil)
+	err := authForm.AttemptLogin(formContext)
 	switch {
 	case errors.As(err, &redirectError):
 		http.Redirect(rw, req, redirectError.Target, redirectError.Code)
@@ -234,133 +249,18 @@ func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 
 func (h *httpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, _ auth.UserAuth) {
 	// TODO: rewrite
-	//h.authOAuth.OAuthCallback(rw, req, h.updateExternalUserInfo, h.setLoginDataCookie, h.SafeRedirect)
-}
-
-func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth.UserAuth, error) {
-	sessionData, err := h.fetchUserInfo(sso, token)
-	if err != nil || sessionData.Subject == "" {
-		return auth.UserAuth{}, fmt.Errorf("failed to fetch user info")
-	}
-
-	// TODO(melon): fix this to use a merging of lavender and tulip auth
-
-	// find an existing user with the matching oauth2 namespace and subject
-	var userSubject string
-	err = h.DbTxError(func(tx *database.Queries) (err error) {
-		userSubject, err = tx.FindUserByAuth(req.Context(), database.FindUserByAuthParams{
-			AuthType:      types.AuthTypeOauth2,
-			AuthNamespace: sso.Namespace,
-			AuthUser:      sessionData.Subject,
-		})
-		return
-	})
-	switch {
-	case err == nil:
-		// user already exists
-		err = h.DbTxError(func(tx *database.Queries) error {
-			return h.updateOAuth2UserProfile(req.Context(), tx, sessionData)
-		})
-		return auth.UserAuth{
-			Subject:  userSubject,
-			Factor:   auth.StateExtended,
-			UserInfo: sessionData.UserInfo,
-		}, err
-	case errors.Is(err, sql.ErrNoRows):
-		// happy path for registration
-		break
-	default:
-		// another error occurred
-		return auth.UserAuth{}, err
-	}
-
-	// guard for disabled registration
-	if !sso.Config.Registration {
-		return auth.UserAuth{}, fmt.Errorf("registration is not enabled for this authentication source")
-	}
-
-	// TODO(melon): rework this
-	name := sessionData.UserInfo.GetStringOrDefault("name", "Unknown User")
-	uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
-	uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
-
-	err = h.DbTxError(func(tx *database.Queries) (err error) {
-		userSubject, err = tx.AddOAuthUser(req.Context(), database.AddOAuthUserParams{
-			Email:         uEmail,
-			EmailVerified: uEmailVerified,
-			Name:          name,
-			Username:      sessionData.UserInfo.GetStringFromKeysOrEmpty("login", "preferred_username"),
-			AuthNamespace: sso.Namespace,
-			AuthUser:      sessionData.UserInfo.GetStringOrEmpty("sub"),
-		})
-		if err != nil {
-			return err
+	for _, i := range h.authSources {
+		if callback, ok := i.(authContext.CallbackContext); ok {
+			callback.HandleCallback(rw, req)
+			user := callback.User()
+			h.setLoginDataCookie(rw, auth.UserAuth{
+				Subject:  user.Subject,
+				Factor:   auth.StateExtended,
+				UserInfo: auth.UserInfoFields{},
+			}, "loginName")
+			break
 		}
-
-		// if adding the user succeeds then update the profile
-		return h.updateOAuth2UserProfile(req.Context(), tx, sessionData)
-	})
-	if err != nil {
-		return auth.UserAuth{}, err
 	}
-
-	// only continues if the above tx succeeds
-	if err := h.DbTxError(func(tx *database.Queries) error {
-		return tx.UpdateUserToken(req.Context(), database.UpdateUserTokenParams{
-			AccessToken:  sql.NullString{String: token.AccessToken, Valid: true},
-			RefreshToken: sql.NullString{String: token.RefreshToken, Valid: true},
-			TokenExpiry:  sql.NullTime{Time: token.Expiry, Valid: true},
-			Subject:      sessionData.Subject,
-		})
-	}); err != nil {
-		return auth.UserAuth{}, err
-	}
-
-	// TODO(melon): this feels bad
-	sessionData = auth.UserAuth{
-		Subject:  userSubject,
-		Factor:   auth.StateExtended,
-		UserInfo: sessionData.UserInfo,
-	}
-
-	return sessionData, nil
-}
-
-func (h *httpServer) updateOAuth2UserProfile(ctx context.Context, tx *database.Queries, sessionData auth.UserAuth) error {
-	// all of these updates must succeed
-	return tx.UseTx(ctx, func(tx *database.Queries) error {
-		name := sessionData.UserInfo.GetStringOrDefault("name", "Unknown User")
-
-		err := tx.ModifyUserRemoteLogin(ctx, database.ModifyUserRemoteLoginParams{
-			Login:      sessionData.UserInfo.GetStringFromKeysOrEmpty("login", "preferred_username"),
-			ProfileUrl: sessionData.UserInfo.GetStringOrEmpty("profile"),
-			Subject:    sessionData.Subject,
-		})
-		if err != nil {
-			return err
-		}
-
-		pronoun, err := pronouns.FindPronoun(sessionData.UserInfo.GetStringOrEmpty("pronouns"))
-		if err != nil {
-			pronoun = pronouns.TheyThem
-		}
-		locale, err := language.Parse(sessionData.UserInfo.GetStringOrEmpty("locale"))
-		if err != nil {
-			locale = language.AmericanEnglish
-		}
-
-		return tx.ModifyProfile(ctx, database.ModifyProfileParams{
-			Name:      name,
-			Picture:   sessionData.UserInfo.GetStringOrEmpty("profile"),
-			Website:   sessionData.UserInfo.GetStringOrEmpty("website"),
-			Pronouns:  types.UserPronoun{Pronoun: pronoun},
-			Birthdate: sessionData.UserInfo.GetNullDate("birthdate"),
-			Zone:      sessionData.UserInfo.GetStringOrDefault("zoneinfo", "UTC"),
-			Locale:    types.UserLocale{Tag: locale},
-			UpdatedAt: time.Now(),
-			Subject:   sessionData.Subject,
-		})
-	})
 }
 
 const twelveHours = 12 * time.Hour
@@ -476,6 +376,7 @@ func (h *httpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Re
 		return nil
 	})
 
+	// TODO: not sure how I want to handle this yet...
 	*userAuth, err = h.updateExternalUserInfo(req, sso, oauthToken)
 	if err != nil {
 		return err
@@ -488,28 +389,7 @@ func (h *httpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Re
 	return nil
 }
 
-func (h *httpServer) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth.UserAuth, error) {
-	res, err := sso.OAuth2Config.Client(context.Background(), token).Get(sso.UserInfoEndpoint)
-	if err != nil || res.StatusCode != http.StatusOK {
-		return auth.UserAuth{}, fmt.Errorf("request failed")
-	}
-	defer res.Body.Close()
-
-	var userInfoJson auth.UserInfoFields
-	if err := json.NewDecoder(res.Body).Decode(&userInfoJson); err != nil {
-		return auth.UserAuth{}, err
-	}
-	subject, ok := userInfoJson.GetString("sub")
-	if !ok {
-		return auth.UserAuth{}, fmt.Errorf("invalid subject")
-	}
-
-	// TODO(melon): there is no need for this
-	//subject += "@" + sso.Config.Namespace
-
-	return auth.UserAuth{
-		Subject:  subject,
-		Factor:   auth.StateExtended,
-		UserInfo: userInfoJson,
-	}, nil
+// TODO: not sure how I want to handle this yet...
+func (h *httpServer) updateExternalUserInfo(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth.UserAuth, error) {
+	return auth.UserAuth{}, fmt.Errorf("no")
 }

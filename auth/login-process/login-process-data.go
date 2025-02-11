@@ -1,4 +1,4 @@
-package login_process
+package process
 
 import "github.com/1f349/mjwt"
 

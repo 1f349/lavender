@@ -16,7 +16,6 @@ import (
 	"github.com/go-oauth2/oauth2/v4/server"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
 )
@@ -116,24 +115,6 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, mailSender *mail.Mail, 
 	SetupManageApps(r, hs)
 	SetupManageUsers(r, hs)
 	SetupOAuth2(r, hs, signingKey, db)
-}
-
-func (h *httpServer) SafeRedirect(rw http.ResponseWriter, req *http.Request) {
-	redirectUrl := req.FormValue("redirect")
-	if redirectUrl == "" {
-		http.Redirect(rw, req, "/", http.StatusFound)
-		return
-	}
-	parse, err := url.Parse(redirectUrl)
-	if err != nil {
-		http.Error(rw, "Failed to parse redirect url: "+redirectUrl, http.StatusBadRequest)
-		return
-	}
-	if parse.Scheme != "" && parse.Opaque != "" && parse.User != nil && parse.Host != "" {
-		http.Error(rw, "Invalid redirect url: "+redirectUrl, http.StatusBadRequest)
-		return
-	}
-	http.Redirect(rw, req, parse.String(), http.StatusFound)
 }
 
 func ParseClaims(claims string) map[string]bool {

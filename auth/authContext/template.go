@@ -2,7 +2,6 @@ package authContext
 
 import (
 	"context"
-	"github.com/1f349/lavender/auth/login-process"
 	"github.com/1f349/lavender/database"
 	"net/http"
 )
@@ -19,21 +18,7 @@ type TemplateContext interface {
 	Request() *http.Request
 	User() *database.User
 	Render(data any)
-}
-
-type FormContext interface {
-	Context() context.Context
-	Request() *http.Request
-	User() *database.User
-	SetUser(user *database.User)
-	Render(data any)
-	UpdateSession(data login_process.LoginProcessData)
-}
-
-type ButtonContext interface {
-	Context() context.Context
-	Request() *http.Request
-	Render(data any)
+	__templateContext()
 }
 
 var _ TemplateContext = &BaseTemplateContext{}
@@ -52,6 +37,6 @@ func (t *BaseTemplateContext) User() *database.User { return t.user }
 
 func (t *BaseTemplateContext) Render(data any) { t.data = data }
 
-func (t *BaseTemplateContext) Data() any {
-	return t.data
-}
+func (t *BaseTemplateContext) Data() any { return t.data }
+
+func (t *BaseTemplateContext) __templateContext() {}

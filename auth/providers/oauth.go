@@ -2,18 +2,28 @@ package providers
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/1f349/cache"
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
 	"github.com/1f349/lavender/database"
+	"github.com/1f349/lavender/database/types"
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/url"
 	"github.com/google/uuid"
+	"github.com/mrmelon54/pronouns"
 	"golang.org/x/oauth2"
+	"golang.org/x/text/language"
 	"net/http"
 	"time"
 )
+
+type OauthCallback interface {
+	OAuthCallback(rw http.ResponseWriter, req *http.Request, info func(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth.UserAuth, error), cookie func(rw http.ResponseWriter, authData auth.UserAuth, loginName string) bool, redirect func(rw http.ResponseWriter, req *http.Request))
+}
 
 type flowStateData struct {
 	loginName string
@@ -116,4 +126,156 @@ type oauthServiceLogin int
 
 func WithWellKnown(ctx context.Context, login *issuer.WellKnownOIDC) context.Context {
 	return context.WithValue(ctx, oauthServiceLogin(0), login)
+}
+
+func (o OAuthLogin) updateExternalUserInfo(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth.UserAuth, error) {
+	sessionData, err := o.fetchUserInfo(sso, token)
+	if err != nil || sessionData.Subject == "" {
+		return auth.UserAuth{}, fmt.Errorf("failed to fetch user info")
+	}
+
+	// TODO(melon): fix this to use a merging of lavender and tulip auth
+
+	// find an existing user with the matching oauth2 namespace and subject
+	var userSubject string
+	err = o.DB.UseTx(req.Context(), func(tx *database.Queries) (err error) {
+		userSubject, err = tx.FindUserByAuth(req.Context(), database.FindUserByAuthParams{
+			AuthType:      types.AuthTypeOauth2,
+			AuthNamespace: sso.Namespace,
+			AuthUser:      sessionData.Subject,
+		})
+		return
+	})
+	switch {
+	case err == nil:
+		// user already exists
+		err = o.DB.UseTx(req.Context(), func(tx *database.Queries) (err error) {
+			return o.updateOAuth2UserProfile(req.Context(), tx, sessionData)
+		})
+		return auth.UserAuth{
+			Subject:  userSubject,
+			Factor:   auth.StateExtended,
+			UserInfo: sessionData.UserInfo,
+		}, err
+	case errors.Is(err, sql.ErrNoRows):
+		// happy path for registration
+		break
+	default:
+		// another error occurred
+		return auth.UserAuth{}, err
+	}
+
+	// guard for disabled registration
+	if !sso.Config.Registration {
+		return auth.UserAuth{}, fmt.Errorf("registration is not enabled for this authentication source")
+	}
+
+	// TODO(melon): rework this
+	name := sessionData.UserInfo.GetStringOrDefault("name", "Unknown User")
+	uEmail := sessionData.UserInfo.GetStringOrDefault("email", "unknown@localhost")
+	uEmailVerified, _ := sessionData.UserInfo.GetBoolean("email_verified")
+
+	err = o.DB.UseTx(req.Context(), func(tx *database.Queries) (err error) {
+		userSubject, err = tx.AddOAuthUser(req.Context(), database.AddOAuthUserParams{
+			Email:         uEmail,
+			EmailVerified: uEmailVerified,
+			Name:          name,
+			Username:      sessionData.UserInfo.GetStringFromKeysOrEmpty("login", "preferred_username"),
+			AuthNamespace: sso.Namespace,
+			AuthUser:      sessionData.UserInfo.GetStringOrEmpty("sub"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// if adding the user succeeds then update the profile
+		return o.updateOAuth2UserProfile(req.Context(), tx, sessionData)
+	})
+	if err != nil {
+		return auth.UserAuth{}, err
+	}
+
+	// only continues if the above tx succeeds
+	if err := o.DB.UseTx(req.Context(), func(tx *database.Queries) error {
+		return tx.UpdateUserToken(req.Context(), database.UpdateUserTokenParams{
+			AccessToken:  sql.NullString{String: token.AccessToken, Valid: true},
+			RefreshToken: sql.NullString{String: token.RefreshToken, Valid: true},
+			TokenExpiry:  sql.NullTime{Time: token.Expiry, Valid: true},
+			Subject:      sessionData.Subject,
+		})
+	}); err != nil {
+		return auth.UserAuth{}, err
+	}
+
+	// TODO(melon): this feels bad
+	sessionData = auth.UserAuth{
+		Subject:  userSubject,
+		Factor:   auth.StateExtended,
+		UserInfo: sessionData.UserInfo,
+	}
+
+	return sessionData, nil
+}
+
+func (o OAuthLogin) updateOAuth2UserProfile(ctx context.Context, tx *database.Queries, sessionData auth.UserAuth) error {
+	// all of these updates must succeed
+	return tx.UseTx(ctx, func(tx *database.Queries) error {
+		name := sessionData.UserInfo.GetStringOrDefault("name", "Unknown User")
+
+		err := tx.ModifyUserRemoteLogin(ctx, database.ModifyUserRemoteLoginParams{
+			Login:      sessionData.UserInfo.GetStringFromKeysOrEmpty("login", "preferred_username"),
+			ProfileUrl: sessionData.UserInfo.GetStringOrEmpty("profile"),
+			Subject:    sessionData.Subject,
+		})
+		if err != nil {
+			return err
+		}
+
+		pronoun, err := pronouns.FindPronoun(sessionData.UserInfo.GetStringOrEmpty("pronouns"))
+		if err != nil {
+			pronoun = pronouns.TheyThem
+		}
+		locale, err := language.Parse(sessionData.UserInfo.GetStringOrEmpty("locale"))
+		if err != nil {
+			locale = language.AmericanEnglish
+		}
+
+		return tx.ModifyProfile(ctx, database.ModifyProfileParams{
+			Name:      name,
+			Picture:   sessionData.UserInfo.GetStringOrEmpty("profile"),
+			Website:   sessionData.UserInfo.GetStringOrEmpty("website"),
+			Pronouns:  types.UserPronoun{Pronoun: pronoun},
+			Birthdate: sessionData.UserInfo.GetNullDate("birthdate"),
+			Zone:      sessionData.UserInfo.GetStringOrDefault("zoneinfo", "UTC"),
+			Locale:    types.UserLocale{Tag: locale},
+			UpdatedAt: time.Now(),
+			Subject:   sessionData.Subject,
+		})
+	})
+}
+
+func (o OAuthLogin) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth.UserAuth, error) {
+	res, err := sso.OAuth2Config.Client(context.Background(), token).Get(sso.UserInfoEndpoint)
+	if err != nil || res.StatusCode != http.StatusOK {
+		return auth.UserAuth{}, fmt.Errorf("request failed")
+	}
+	defer res.Body.Close()
+
+	var userInfoJson auth.UserInfoFields
+	if err := json.NewDecoder(res.Body).Decode(&userInfoJson); err != nil {
+		return auth.UserAuth{}, err
+	}
+	subject, ok := userInfoJson.GetString("sub")
+	if !ok {
+		return auth.UserAuth{}, fmt.Errorf("invalid subject")
+	}
+
+	// TODO(melon): there is no need for this
+	//subject += "@" + sso.Config.Namespace
+
+	return auth.UserAuth{
+		Subject:  subject,
+		Factor:   auth.StateExtended,
+		UserInfo: userInfoJson,
+	}, nil
 }
