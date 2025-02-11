@@ -11,5 +11,6 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
       - uses: actions/checkout@v4
-      - run: make build
+      - run: cd web && yarn build
+      - run: go build ./cmd/lavender
       - run: go test ./...
