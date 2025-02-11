@@ -15,6 +15,6 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - uses: actions/checkout@v4
-      - run: cd web && yarn build
+      - run: cd web && yarn install --frozen-lockfile && yarn build
       - run: go build ./cmd/lavender
       - run: go test ./...
