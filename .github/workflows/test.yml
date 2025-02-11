@@ -5,11 +5,15 @@ jobs:
     strategy:
       matrix:
         go-version: [1.23.x]
+        node-version: [22.x.x]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
       - uses: actions/checkout@v4
       - run: cd web && yarn build
       - run: go build ./cmd/lavender
