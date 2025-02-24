@@ -3,6 +3,7 @@ export const partial = true;
 ---
 
 <form method="POST" action="/login/otp" autocomplete="off">
+  <input type="hidden" name="provider" value="otp"/>
   <input type="hidden" name="redirect" value="[[.Redirect]]"/>
   <div>
     <label for="field_code">OTP Code:</label>

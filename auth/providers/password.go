@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
+	"github.com/1f349/lavender/auth/process"
 	"github.com/1f349/lavender/database"
 	"net/http"
 )
@@ -24,7 +25,7 @@ type PasswordLogin struct {
 	DB passwordLoginDB
 }
 
-func (b *PasswordLogin) AccessState() auth.State { return auth.StateBase }
+func (b *PasswordLogin) AccessState() process.State { return process.StateBase }
 
 func (b *PasswordLogin) Name() string { return "password" }
 

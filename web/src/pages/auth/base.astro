@@ -3,6 +3,7 @@ export const partial = true;
 ---
 
 <form method="POST" action="/login">
+  <input type="hidden" name="provider" value="base"/>
   <input type="hidden" name="redirect" value="[[.Redirect]]"/>
   <div>
     <label for="field_email">Email:</label>

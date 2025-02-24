@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/1f349/lavender/auth/process"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"net/url"
@@ -11,7 +12,7 @@ type UserHandler func(rw http.ResponseWriter, req *http.Request, params httprout
 
 type UserAuth struct {
 	Subject  string
-	Factor   State
+	Factor   process.State
 	UserInfo UserInfoFields
 }
 

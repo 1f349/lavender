@@ -11,6 +11,7 @@ import Layout from "../layouts/Layout.astro";
   [[ .AuthTemplate ]]
   <div class="w-full">
     <form method="POST" action="/login">
+      <input type="hidden" name="provider" value="base"/>
       <input type="hidden" name="redirect" value="[[ .Redirect ]]"/>
       <div class="w-full">
         <label>Email: <input type="email" name="email" value="[[ .UserEmail ]]" required/></label>

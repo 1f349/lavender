@@ -35,8 +35,17 @@ type httpServer struct {
 	// mailLinkCache contains a mapping of verify uuids to user uuids
 	mailLinkCache *cache.Cache[mailLinkKey, string]
 
+	// flowState contains the flow state of 3rd party oauth2
+	flowState *cache.Cache[string, flowStateData]
+
 	authSources []auth.Provider
 	authButtons []auth.Button
+}
+
+type flowStateData struct {
+	loginName string
+	sso       *issuer.WellKnownOIDC
+	redirect  string
 }
 
 type mailLink byte
@@ -55,14 +64,16 @@ type mailLinkKey struct {
 func SetupRouter(r *httprouter.Router, config conf.Conf, mailSender *mail.Mail, db *database.Queries, signingKey *mjwt.Issuer) {
 	// TODO: move auth provider init to main function
 	// TODO: allow dynamically changing the providers based on database information
-	authBasic := &providers.PasswordLogin{DB: db}
+	authInitial := &providers.InitialLogin{}
+	authPassword := &providers.PasswordLogin{DB: db}
 	authOtp := &providers.OtpLogin{DB: db}
 	authOAuth := &providers.OAuthLogin{DB: db, BaseUrl: &config.BaseUrl}
 	authOAuth.Init()
 	authPasskey := &providers.PasskeyLogin{DB: db}
 
 	authSources := []auth.Provider{
-		authBasic,
+		authInitial,
+		authPassword,
 		authOtp,
 		authOAuth,
 		authPasskey,

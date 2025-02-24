@@ -9,6 +9,7 @@ import (
 	"github.com/1f349/cache"
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
+	"github.com/1f349/lavender/auth/process"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/database/types"
 	"github.com/1f349/lavender/issuer"
@@ -52,7 +53,7 @@ func (o OAuthLogin) authUrlBase(ref string) *url.URL {
 	return o.BaseUrl.Resolve("oauth", o.Name(), ref)
 }
 
-func (o OAuthLogin) AccessState() auth.State { return auth.StateUnauthorized }
+func (o OAuthLogin) AccessState() process.State { return process.StateUnauthorized }
 
 func (o OAuthLogin) Name() string { return "oauth" }
 
@@ -154,7 +155,7 @@ func (o OAuthLogin) updateExternalUserInfo(req *http.Request, sso *issuer.WellKn
 		})
 		return auth.UserAuth{
 			Subject:  userSubject,
-			Factor:   auth.StateExtended,
+			Factor:   process.StateExtended,
 			UserInfo: sessionData.UserInfo,
 		}, err
 	case errors.Is(err, sql.ErrNoRows):
@@ -210,7 +211,7 @@ func (o OAuthLogin) updateExternalUserInfo(req *http.Request, sso *issuer.WellKn
 	// TODO(melon): this feels bad
 	sessionData = auth.UserAuth{
 		Subject:  userSubject,
-		Factor:   auth.StateExtended,
+		Factor:   process.StateExtended,
 		UserInfo: sessionData.UserInfo,
 	}
 
@@ -275,7 +276,7 @@ func (o OAuthLogin) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token
 
 	return auth.UserAuth{
 		Subject:  subject,
-		Factor:   auth.StateExtended,
+		Factor:   process.StateExtended,
 		UserInfo: userInfoJson,
 	}, nil
 }

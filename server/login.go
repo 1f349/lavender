@@ -3,11 +3,11 @@ package server
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
+	"github.com/1f349/lavender/auth/process"
 	"github.com/1f349/lavender/auth/providers"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
@@ -43,7 +43,7 @@ func getUserLoginName(req *http.Request) string {
 	return originUrl.Query().Get("login_name")
 }
 
-func (h *httpServer) getAuthWithState(state auth.State) auth.Provider {
+func (h *httpServer) getAuthWithState(state process.State) auth.Provider {
 	for _, i := range h.authSources {
 		if i.AccessState() == state {
 			return i
@@ -75,30 +75,6 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 
 	// TODO: some of this should be more like tulip
 
-	cookie, err := req.Cookie("lavender-login-name")
-	if err == nil && cookie.Valid() == nil {
-		loginName := cookie.Value
-
-		_, err := h.db.GetUser(req.Context(), userAuth.Subject)
-		switch {
-		case err == nil:
-			break
-		case errors.Is(err, sql.ErrNoRows):
-			loginName = ""
-		default:
-			http.Error(rw, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		web.RenderPageTemplate(rw, "login-memory", map[string]any{
-			"ServiceName": h.conf.ServiceName,
-			"LoginName":   loginName,
-			"Redirect":    req.URL.Query().Get("redirect"),
-			"Source":      "start",
-		})
-		return
-	}
-
 	buttonCtx := authContext.NewTemplateContext(req, new(database.User))
 
 	buttonTemplates := make([]template.HTML, 0, len(h.authButtons))
@@ -113,13 +89,17 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 		}
 	}
 
-	type loginError struct {
-		Error string `json:"error"`
+	authState := process.StateUnauthorized
+
+	jwtCookie, err := readJwtCookie[process.LoginProcessData](req, "login-process", h.signingKey.KeyStore())
+	if err == nil {
+		authState = jwtCookie.Claims.State
+		return
 	}
 
-	var renderTemplate template.HTML
+	provider := h.getAuthWithState(authState)
 
-	provider := h.getAuthWithState(auth.StateUnauthorized)
+	var renderTemplate template.HTML
 
 	// Maybe the admin has disabled some login providers but does have a button based provider available?
 	form, ok := provider.(auth.Form)
@@ -127,7 +107,9 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 		renderTemplate, err = h.renderAuthTemplate(req, form)
 		if err != nil {
 			logger.Logger.Warn("No provider for login")
-			web.RenderPageTemplate(rw, "login-error", loginError{Error: "No available provider for login"})
+			web.RenderPageTemplate(rw, "login-error", struct {
+				Error string `json:"error"`
+			}{Error: "No available provider for login"})
 			return
 		}
 	}
@@ -165,6 +147,7 @@ func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 		}).String(), http.StatusFound)
 		return
 	}
+
 	loginName := req.PostFormValue("email")
 
 	// append local namespace if @ is missing
@@ -206,16 +189,16 @@ func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 	// TODO(melon): rewrite login system here
 
 	// if the login is the local server
-	if login == issuer.MeWellKnown {
-		// TODO(melon): work on this
-		// TODO: rewrite
-		//err := h.authBasic.AttemptLogin(ctx, req, nil)
-		var err error
-		switch {
-		case errors.As(err, &redirectError):
-			http.Redirect(rw, req, redirectError.Target, redirectError.Code)
-			return
-		}
+	if login != issuer.MeWellKnown {
+		// save state for use later
+		state := login.Config.Namespace + ":" + uuid.NewString()
+		h.flowState.Set(state, flowStateData{loginName, login, req.PostFormValue("redirect")}, time.Now().Add(15*time.Minute))
+
+		// generate oauth2 config and redirect to authorize URL
+		oa2conf := login.OAuth2Config
+		oa2conf.RedirectURL = h.conf.BaseUrl.JoinPath("callback").String()
+		nextUrl := oa2conf.AuthCodeURL(state, oauth2.SetAuthURLParam("login_name", loginUn))
+		http.Redirect(rw, req, nextUrl, http.StatusFound)
 		return
 	}
 
@@ -238,29 +221,68 @@ func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 	}
 
 	// TODO: rewrite
-	formContext := authContext.NewFormContext(req, nil)
+	formContext := authContext.NewFormContext(req, nil, rw)
 	err := authForm.AttemptLogin(formContext)
 	switch {
 	case errors.As(err, &redirectError):
 		http.Redirect(rw, req, redirectError.Target, redirectError.Code)
 		return
 	}
+
+	// TODO: idk why login process data isn't working properly
+	processData := formContext.GetLoginProcessData()
+	if h.setLoginProcessCookie(rw, processData) {
+		return
+	}
+
+	// TODO: figure this out
+	logger.Logger.Debug("POST /login: form render data: ", formContext.Data())
+	http.Redirect(rw, req, h.conf.BaseUrl.JoinPath("login").String(), http.StatusFound)
+}
+
+func (h *httpServer) setLoginProcessCookie(rw http.ResponseWriter, data process.LoginProcessData) bool {
+	gen, err := h.signingKey.GenerateJwt("login-process", uuid.NewString(), jwt.ClaimStrings{h.conf.BaseUrl.String()}, time.Hour, data)
+	if err != nil {
+		http.Error(rw, "Failed to generate cookie token", http.StatusInternalServerError)
+		return true
+	}
+	http.SetCookie(rw, &http.Cookie{
+		Name:     "lavender-login-process",
+		Value:    gen,
+		Path:     "/",
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	return false
 }
 
 func (h *httpServer) loginCallback(rw http.ResponseWriter, req *http.Request, _ httprouter.Params, _ auth.UserAuth) {
-	// TODO: rewrite
-	for _, i := range h.authSources {
-		if callback, ok := i.(authContext.CallbackContext); ok {
-			callback.HandleCallback(rw, req)
-			user := callback.User()
-			h.setLoginDataCookie(rw, auth.UserAuth{
-				Subject:  user.Subject,
-				Factor:   auth.StateExtended,
-				UserInfo: auth.UserInfoFields{},
-			}, "loginName")
-			break
-		}
+	flowState, ok := h.flowState.Get(req.FormValue("state"))
+	if !ok {
+		http.Error(rw, "Invalid flow state", http.StatusBadRequest)
+		return
 	}
+	token, err := flowState.sso.OAuth2Config.Exchange(context.Background(), req.FormValue("code"), oauth2.SetAuthURLParam("redirect_uri", h.conf.BaseUrl.JoinPath("callback").String()))
+	if err != nil {
+		http.Error(rw, "Failed to exchange code for token", http.StatusInternalServerError)
+		return
+	}
+
+	userAuth, err := h.updateExternalUserInfo(req, flowState.sso, token)
+	if err != nil {
+		http.Error(rw, "Failed to update external user info", http.StatusInternalServerError)
+		return
+	}
+
+	if h.setLoginDataCookie(rw, userAuth, flowState.loginName) {
+		http.Error(rw, "Failed to save login cookie", http.StatusInternalServerError)
+		return
+	}
+	if flowState.redirect != "" {
+		req.Form.Set("redirect", flowState.redirect)
+	}
+	utils.SafeRedirect(rw, req)
 }
 
 const twelveHours = 12 * time.Hour
@@ -268,7 +290,7 @@ const oneWeek = 7 * 24 * time.Hour
 
 type lavenderLoginAccess struct {
 	UserInfo auth.UserInfoFields `json:"user_info"`
-	Factor   auth.State          `json:"factor"`
+	Factor   process.State       `json:"factor"`
 	mjwtAuth.AccessTokenClaims
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
+	"github.com/1f349/lavender/auth/process"
 	"github.com/1f349/lavender/database"
 	"github.com/xlzd/gotp"
 	"net/http"
@@ -26,7 +27,7 @@ type OtpLogin struct {
 	DB otpLoginDB
 }
 
-func (o *OtpLogin) AccessState() auth.State { return auth.StateBasic }
+func (o *OtpLogin) AccessState() process.State { return process.StateBasic }
 
 func (o *OtpLogin) Name() string { return "basic" }
 

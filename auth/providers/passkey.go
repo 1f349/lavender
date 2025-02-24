@@ -3,6 +3,7 @@ package providers
 import (
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
+	"github.com/1f349/lavender/auth/process"
 )
 
 type passkeyLoginDB interface {
@@ -18,7 +19,7 @@ type PasskeyLogin struct {
 	DB passkeyLoginDB
 }
 
-func (p *PasskeyLogin) AccessState() auth.State { return auth.StateUnauthorized }
+func (p *PasskeyLogin) AccessState() process.State { return process.StateUnauthorized }
 
 func (p *PasskeyLogin) Name() string { return "passkey" }
 
