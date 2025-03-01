@@ -2,6 +2,23 @@
 export const partial = true;
 ---
 
+[[ if .LoginNameMemory ]]
+<div>Login in as: <span>[[ .UserEmail ]]</span></div>
+<div>
+  <form method="POST" action="/login">
+    <input type="hidden" name="provider" value="base"/>
+    <button type="submit" name="not-you" value="1">Not You?</button>
+  </form>
+</div>
+<div>
+  <form method="POST" action="/login">
+    <input type="hidden" name="provider" value="base"/>
+    <input type="hidden" name="redirect" value="[[ .Redirect ]]"/>
+    <input type="hidden" name="email" value="[[ .UserEmail ]]"/>
+    <button type="submit">Continue</button>
+  </form>
+</div>
+[[ else ]]
 <form method="POST" action="/login">
   <input type="hidden" name="provider" value="base"/>
   <input type="hidden" name="redirect" value="[[.Redirect]]"/>
@@ -14,3 +31,4 @@ export const partial = true;
   </div>
   <button type="submit">Login</button>
 </form>
+[[ end ]]

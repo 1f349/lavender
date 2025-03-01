@@ -9,16 +9,6 @@ import Layout from "../layouts/Layout.astro";
   <p>Check your inbox for a verification email</p>
   [[ end ]]
   [[ .AuthTemplate ]]
-  <div class="w-full">
-    <form method="POST" action="/login">
-      <input type="hidden" name="provider" value="base"/>
-      <input type="hidden" name="redirect" value="[[ .Redirect ]]"/>
-      <div class="w-full">
-        <label>Email: <input type="email" name="email" value="[[ .UserEmail ]]" required/></label>
-      </div>
-      <button type="submit">Continue</button>
-    </form>
-  </div>
   [[ if gt (len .AuthButtons) 0 ]]
   <div class="auth-buttons">
     [[ range $authButton := .AuthButtons ]]

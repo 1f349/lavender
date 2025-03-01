@@ -38,8 +38,9 @@ type httpServer struct {
 	// flowState contains the flow state of 3rd party oauth2
 	flowState *cache.Cache[string, flowStateData]
 
-	authSources []auth.Provider
-	authButtons []auth.Button
+	authSources        []auth.Provider
+	authButtons        []auth.Button
+	formProviderLookup map[string]auth.Form
 }
 
 type flowStateData struct {
@@ -71,20 +72,6 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, mailSender *mail.Mail, 
 	authOAuth.Init()
 	authPasskey := &providers.PasskeyLogin{DB: db}
 
-	authSources := []auth.Provider{
-		authInitial,
-		authPassword,
-		authOtp,
-		authOAuth,
-		authPasskey,
-	}
-	authButtons := make([]auth.Button, 0)
-	for _, source := range authSources {
-		if button, isButton := source.(auth.Button); isButton {
-			authButtons = append(authButtons, button)
-		}
-	}
-
 	hs := &httpServer{
 		r:          r,
 		db:         db,
@@ -94,8 +81,26 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, mailSender *mail.Mail, 
 
 		mailLinkCache: cache.New[mailLinkKey, string](),
 
-		authSources: authSources,
-		authButtons: authButtons,
+		authSources: []auth.Provider{
+			authInitial,
+			authPassword,
+			authOtp,
+			authOAuth,
+			authPasskey,
+		},
+		authButtons:        make([]auth.Button, 0),
+		formProviderLookup: make(map[string]auth.Form),
+	}
+
+	// build slices and maps for quick access to auth interfaces
+	for _, source := range hs.authSources {
+		if button, isButton := source.(auth.Button); isButton {
+			hs.authButtons = append(hs.authButtons, button)
+		}
+
+		if form, isForm := source.(auth.Form); isForm {
+			hs.formProviderLookup[form.Name()] = form
+		}
 	}
 
 	var err error

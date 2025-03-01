@@ -19,6 +19,10 @@ const (
 	StateSudo
 )
 
+func (s State) IsValid() bool {
+	return s <= StateSudo
+}
+
 func (s State) IsLoggedIn() bool { return s >= StateExtended }
 
 func (s State) IsSudoAvailable() bool { return s == StateSudo }

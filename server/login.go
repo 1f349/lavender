@@ -8,7 +8,6 @@ import (
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
 	"github.com/1f349/lavender/auth/process"
-	"github.com/1f349/lavender/auth/providers"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/logger"
@@ -23,7 +22,6 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 )
 
@@ -52,8 +50,8 @@ func (h *httpServer) getAuthWithState(state process.State) auth.Provider {
 	return nil
 }
 
-func (h *httpServer) renderAuthTemplate(req *http.Request, provider auth.Form) (template.HTML, error) {
-	tmpCtx := authContext.NewTemplateContext(req, new(database.User))
+func (h *httpServer) renderAuthTemplate(req *http.Request, provider auth.Form, processData process.LoginProcessData) (template.HTML, error) {
+	tmpCtx := authContext.NewTemplateContext(req, new(database.User), processData)
 
 	err := provider.RenderTemplate(tmpCtx)
 	if err != nil {
@@ -73,9 +71,16 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 		return
 	}
 
+	var processData process.LoginProcessData
+
+	jwtCookie, err := readJwtCookie[process.LoginProcessData](req, "lavender-login-process", h.signingKey.KeyStore())
+	if err == nil {
+		processData = jwtCookie.Claims
+	}
+
 	// TODO: some of this should be more like tulip
 
-	buttonCtx := authContext.NewTemplateContext(req, new(database.User))
+	buttonCtx := authContext.NewTemplateContext(req, new(database.User), processData)
 
 	buttonTemplates := make([]template.HTML, 0, len(h.authButtons))
 	for i := range h.authButtons {
@@ -89,22 +94,14 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 		}
 	}
 
-	authState := process.StateUnauthorized
-
-	jwtCookie, err := readJwtCookie[process.LoginProcessData](req, "login-process", h.signingKey.KeyStore())
-	if err == nil {
-		authState = jwtCookie.Claims.State
-		return
-	}
-
-	provider := h.getAuthWithState(authState)
+	provider := h.getAuthWithState(processData.State)
 
 	var renderTemplate template.HTML
 
 	// Maybe the admin has disabled some login providers but does have a button based provider available?
 	form, ok := provider.(auth.Form)
 	if provider != nil && ok {
-		renderTemplate, err = h.renderAuthTemplate(req, form)
+		renderTemplate, err = h.renderAuthTemplate(req, form, processData)
 		if err != nil {
 			logger.Logger.Warn("No provider for login")
 			web.RenderPageTemplate(rw, "login-error", struct {
@@ -131,106 +128,40 @@ func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 		return
 	}
 
-	// TODO: some of this should be more like tulip
-
-	if req.PostFormValue("not-you") == "1" {
-		http.SetCookie(rw, &http.Cookie{
-			Name:     "lavender-login-name",
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-		})
-		http.Redirect(rw, req, (&url.URL{
-			Path: "/login",
-		}).String(), http.StatusFound)
-		return
+	var processData process.LoginProcessData
+	jwtCookie, err := readJwtCookie[process.LoginProcessData](req, "lavender-login-process", h.signingKey.KeyStore())
+	if err == nil {
+		processData = jwtCookie.Claims
 	}
 
-	loginName := req.PostFormValue("email")
-
-	// append local namespace if @ is missing
-	n := strings.IndexByte(loginName, '@')
-	if n < 0 {
-		// correct the @ index
-		n = len(loginName)
-		loginName += "@" + h.conf.Namespace
-	}
-
-	login := h.manager.FindServiceFromLogin(loginName)
-	if login == nil {
-		http.Error(rw, "No login service defined for this username", http.StatusBadRequest)
-		return
-	}
-
-	// the @ must exist if the service is defined
-	loginUn := loginName[:n]
-
-	ctx := providers.WithWellKnown(req.Context(), login)
-	ctx = context.WithValue(ctx, "login_username", loginUn)
-	ctx = context.WithValue(ctx, "login_full", loginName)
-
-	// TODO(melon): only do if remember-me is enabled
-	now := time.Now()
-	future := now.AddDate(1, 0, 0)
-	http.SetCookie(rw, &http.Cookie{
-		Name:     "lavender-login-name",
-		Value:    loginName,
-		Path:     "/",
-		Expires:  future,
-		MaxAge:   int(future.Sub(now).Seconds()),
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	var redirectError auth.RedirectError
-
-	// TODO(melon): rewrite login system here
-
-	// if the login is the local server
-	if login != issuer.MeWellKnown {
-		// save state for use later
-		state := login.Config.Namespace + ":" + uuid.NewString()
-		h.flowState.Set(state, flowStateData{loginName, login, req.PostFormValue("redirect")}, time.Now().Add(15*time.Minute))
-
-		// generate oauth2 config and redirect to authorize URL
-		oa2conf := login.OAuth2Config
-		oa2conf.RedirectURL = h.conf.BaseUrl.JoinPath("callback").String()
-		nextUrl := oa2conf.AuthCodeURL(state, oauth2.SetAuthURLParam("login_name", loginUn))
-		http.Redirect(rw, req, nextUrl, http.StatusFound)
-		return
-	}
-
-	var authForm auth.Form
-
-	{
-		for _, i := range h.authSources {
-			if form, ok := i.(auth.Form); ok {
-				if req.PostFormValue("provider") == form.Name() {
-					authForm = form
-					break
-				}
-			}
-		}
-	}
-
+	authForm := h.formProviderLookup[req.PostFormValue("provider")]
 	if authForm == nil {
 		http.Error(rw, "Invalid auth provider", http.StatusBadRequest)
 		return
 	}
 
+	if processData.State != authForm.AccessState() {
+		http.Redirect(rw, req, "/login", http.StatusFound)
+		return
+	}
+
 	// TODO: rewrite
 	formContext := authContext.NewFormContext(req, nil, rw)
-	err := authForm.AttemptLogin(formContext)
-	switch {
-	case errors.As(err, &redirectError):
+	err = authForm.AttemptLogin(formContext)
+
+	var redirectError auth.RedirectError
+	if errors.As(err, &redirectError) {
 		http.Redirect(rw, req, redirectError.Target, redirectError.Code)
 		return
 	}
 
+	// ResponseWriter has been hijacked so we stop processing here
+	if formContext.HijackCalled() {
+		return
+	}
+
 	// TODO: idk why login process data isn't working properly
-	processData := formContext.GetLoginProcessData()
+	processData = formContext.GetLoginProcessData()
 	if h.setLoginProcessCookie(rw, processData) {
 		return
 	}
