@@ -4,6 +4,7 @@ SQL_FILES := $(wildcard $(SQL_SRC_DIR)/{migrations,queries}/*.sql)
 .PHONY: all sqlc astro build
 
 all: sqlc astro
+	go generate ./...
 
 sqlc: $(SQL_FILES)
 	sqlc generate

@@ -1,5 +1,7 @@
 package process
 
+//go:generate stringer -type State
+
 // State defines the currently reached authentication state
 type State byte
 
