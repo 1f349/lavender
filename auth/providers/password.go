@@ -25,14 +25,13 @@ type PasswordLogin struct {
 	DB passwordLoginDB
 }
 
-func (b *PasswordLogin) AccessState() process.State { return process.StateBase }
+func (p *PasswordLogin) AccessState() process.State { return process.StateBase }
 
-func (b *PasswordLogin) Name() string { return "password" }
+func (p *PasswordLogin) Name() string { return "password" }
 
-func (b *PasswordLogin) RenderTemplate(ctx authContext.TemplateContext) error {
+func (p *PasswordLogin) RenderTemplate(ctx authContext.TemplateContext) error {
 	// TODO(melon): rewrite this
 	req := ctx.Request()
-	un := req.FormValue("login")
 	redirect := req.FormValue("redirect")
 	if redirect == "" {
 		redirect = "/"
@@ -41,24 +40,24 @@ func (b *PasswordLogin) RenderTemplate(ctx authContext.TemplateContext) error {
 		UserEmail string
 		Redirect  string
 	}{
-		UserEmail: un,
+		UserEmail: ctx.LoginProcessData().Email,
 		Redirect:  redirect,
 	})
 	return nil
 }
 
-func (b *PasswordLogin) AttemptLogin(ctx authContext.FormContext) error {
+func (p *PasswordLogin) AttemptLogin(ctx authContext.FormContext) error {
 	req := ctx.Request()
-	un := req.FormValue("username")
+	un := req.FormValue("email")
 	pw := req.FormValue("password")
 	if len(pw) < 8 {
 		return auth.BasicUserSafeError(http.StatusBadRequest, "Password too short")
 	}
 
-	login, err := b.DB.CheckLogin(ctx.Context(), un, pw)
+	login, err := p.DB.CheckLogin(ctx.Context(), un, pw)
 	switch {
 	case err == nil:
-		user, err := b.DB.GetUser(ctx.Context(), login.Subject)
+		user, err := p.DB.GetUser(ctx.Context(), login.Subject)
 		if err != nil {
 			return err
 		}

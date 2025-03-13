@@ -219,7 +219,7 @@ func (q *Queries) changeUserPassword(ctx context.Context, arg changeUserPassword
 const checkLogin = `-- name: checkLogin :one
 SELECT subject, password, need_factor, email, email_verified
 FROM users
-WHERE users.subject = ?
+WHERE users.email = ?
 LIMIT 1
 `
 
@@ -231,8 +231,8 @@ type checkLoginRow struct {
 	EmailVerified bool                `json:"email_verified"`
 }
 
-func (q *Queries) checkLogin(ctx context.Context, subject string) (checkLoginRow, error) {
-	row := q.db.QueryRowContext(ctx, checkLogin, subject)
+func (q *Queries) checkLogin(ctx context.Context, email string) (checkLoginRow, error) {
+	row := q.db.QueryRowContext(ctx, checkLogin, email)
 	var i checkLoginRow
 	err := row.Scan(
 		&i.Subject,

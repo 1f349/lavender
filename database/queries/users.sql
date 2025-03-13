@@ -9,7 +9,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 -- name: checkLogin :one
 SELECT subject, password, need_factor, email, email_verified
 FROM users
-WHERE users.subject = ?
+WHERE users.email = ?
 LIMIT 1;
 
 -- name: GetUser :one
