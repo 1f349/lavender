@@ -12,17 +12,15 @@ const (
 	// StateBasic defines the "username and password with no OTP" user state
 	// This is skipped if OTP/passkey is optional and not enabled for the user
 	StateBasic
-	// StateExtended defines the "logged in" user state
-	StateExtended
+	// StateAuthenticated defines the "logged in" user state
+	StateAuthenticated
 	// StateSudo defines the "sudo" user state
 	// This state is temporary and has a configurable duration
 	StateSudo
 )
 
-func (s State) IsValid() bool {
-	return s <= StateSudo
-}
+func (s State) IsValid() bool { return s <= StateSudo }
 
-func (s State) IsLoggedIn() bool { return s >= StateExtended }
+func (s State) IsLoggedIn() bool { return s >= StateAuthenticated }
 
 func (s State) IsSudoAvailable() bool { return s == StateSudo }

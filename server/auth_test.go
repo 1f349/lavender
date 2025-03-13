@@ -19,7 +19,7 @@ func TestUserAuth_NextFlowUrl(t *testing.T) {
 	assert.Equal(t, url.URL{Path: "/login"}, *u.NextFlowUrl(&url.URL{}))
 	assert.Equal(t, url.URL{Path: "/login", RawQuery: url.Values{"redirect": {"/hello"}}.Encode()}, *u.NextFlowUrl(&url.URL{Path: "/hello"}))
 	assert.Equal(t, url.URL{Path: "/login", RawQuery: url.Values{"redirect": {"/hello?a=A"}}.Encode()}, *u.NextFlowUrl(&url.URL{Path: "/hello", RawQuery: url.Values{"a": {"A"}}.Encode()}))
-	u.Factor = process.StateExtended
+	u.Factor = process.StateAuthenticated
 	assert.Nil(t, u.NextFlowUrl(&url.URL{}))
 }
 

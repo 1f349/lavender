@@ -175,7 +175,7 @@ func (o OAuthLogin) updateExternalUserInfo(req *http.Request, sso *issuer.WellKn
 		})
 		return auth.UserAuth{
 			Subject:  userSubject,
-			Factor:   process.StateExtended,
+			Factor:   process.StateBasic, // TODO: should the user be allowed to skip otp via oauth?
 			UserInfo: sessionData.UserInfo,
 		}, err
 	case errors.Is(err, sql.ErrNoRows):
@@ -231,7 +231,7 @@ func (o OAuthLogin) updateExternalUserInfo(req *http.Request, sso *issuer.WellKn
 	// TODO(melon): this feels bad
 	sessionData = auth.UserAuth{
 		Subject:  userSubject,
-		Factor:   process.StateExtended,
+		Factor:   process.StateAuthenticated, // TODO: should the user be allowed to skip otp via oauth?
 		UserInfo: sessionData.UserInfo,
 	}
 
@@ -296,7 +296,7 @@ func (o OAuthLogin) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token
 
 	return auth.UserAuth{
 		Subject:  subject,
-		Factor:   process.StateExtended,
+		Factor:   process.StateBasic, // TODO: should the user be allowed to skip otp via oauth?
 		UserInfo: userInfoJson,
 	}, nil
 }
