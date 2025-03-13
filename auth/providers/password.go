@@ -12,7 +12,7 @@ import (
 )
 
 type passwordLoginDB interface {
-	auth.LookupUserDB
+	GetUser(ctx context.Context, subject string) (database.User, error)
 	CheckLogin(ctx context.Context, un, pw string) (database.CheckLoginResult, error)
 }
 
@@ -58,7 +58,16 @@ func (b *PasswordLogin) AttemptLogin(ctx authContext.FormContext) error {
 	login, err := b.DB.CheckLogin(ctx.Context(), un, pw)
 	switch {
 	case err == nil:
-		return auth.LookupUser(ctx.Context(), b.DB, login.Subject, ctx.User())
+		user, err := b.DB.GetUser(ctx.Context(), login.Subject)
+		if err != nil {
+			return err
+		}
+		ctx.SetUser(&user)
+		ctx.UpdateSession(process.LoginProcessData{
+			State:   process.StateBasic,
+			Email:   un,
+		})
+		return nil
 	case errors.Is(err, sql.ErrNoRows):
 		return auth.BasicUserSafeError(http.StatusForbidden, "Username or password is invalid")
 	default:

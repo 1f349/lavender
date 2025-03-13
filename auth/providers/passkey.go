@@ -1,13 +1,15 @@
 package providers
 
 import (
+	"context"
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
 	"github.com/1f349/lavender/auth/process"
+	"github.com/1f349/lavender/database"
 )
 
 type passkeyLoginDB interface {
-	auth.LookupUserDB
+	GetUser(ctx context.Context, subject string) (database.User, error)
 }
 
 var (
