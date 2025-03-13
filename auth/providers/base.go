@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
-	process "github.com/1f349/lavender/auth/process"
+	"github.com/1f349/lavender/auth/process"
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/logger"
+	"github.com/1f349/lavender/utils"
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"net/http"
@@ -25,6 +26,7 @@ type InitialLogin struct {
 	DB          *database.Queries
 	MyNamespace string
 	Manager     *issuer.Manager
+	OAuth       *OAuthLogin
 }
 
 func (m *InitialLogin) AccessState() process.State { return process.StateUnauthorized }
@@ -101,36 +103,39 @@ func (m *InitialLogin) AttemptLogin(ctx authContext.FormContext) error {
 	}
 
 	// append local namespace if @ is missing
-	n := strings.IndexByte(loginName, '@')
-	if n < 0 {
-		// correct the @ index
-		n = len(loginName)
+	if !strings.ContainsRune(loginName, '@') {
 		loginName += "@" + m.MyNamespace
 	}
 
-	login := m.Manager.FindServiceFromLogin(loginName)
+	user, namespace, err := utils.ParseLoginName(loginName)
+	if err != nil {
+		http.Error(rw, "Invalid login name", http.StatusBadRequest)
+		return fmt.Errorf("invalid login name %s", loginName)
+	}
+
+	login := m.Manager.GetService(namespace)
 	if login == nil {
 		http.Error(rw, "No login service defined for this username", http.StatusBadRequest)
 		return errors.New("no login service defined for this username")
 	}
 
-	// the @ must exist if the service is defined
-	loginUn := loginName[:n]
-
-	// TODO: finish migrating this shit
-
 	// the login is not for this namespace
 	if login != issuer.MeWellKnown {
+		// TODO: this is oauth request code start oauth request
+		// TODO: this could all be 1 function call into oauth
+
 		// save state for use later
 		state := login.Config.Namespace + ":" + uuid.NewString()
-		h.flowState.Set(state, flowStateData{loginName, login, req.PostFormValue("redirect")}, time.Now().Add(15*time.Minute))
+		m.OAuth.flow.Set(state, flowStateData{loginName, login, req.PostFormValue("redirect")}, time.Now().Add(15*time.Minute))
 
 		// generate oauth2 config and redirect to authorize URL
 		oa2conf := login.OAuth2Config
-		oa2conf.RedirectURL = h.conf.BaseUrl.JoinPath("callback").String()
-		nextUrl := oa2conf.AuthCodeURL(state, oauth2.SetAuthURLParam("login_name", loginUn))
-		http.Redirect(rw, req, nextUrl, http.StatusFound)
-		return
+		oa2conf.RedirectURL = m.OAuth.BaseUrl.JoinPath("callback").String()
+		nextUrl := oa2conf.AuthCodeURL(state, oauth2.SetAuthURLParam("login_name", user))
+		return auth.RedirectError{
+			Target: nextUrl,
+			Code:   http.StatusFound,
+		}
 	}
 
 	ctx.UpdateSession(process.LoginProcessData{

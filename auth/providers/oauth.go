@@ -13,17 +13,18 @@ import (
 	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/database/types"
 	"github.com/1f349/lavender/issuer"
-	"github.com/1f349/lavender/url"
+	"github.com/1f349/lavender/utils"
 	"github.com/google/uuid"
 	"github.com/mrmelon54/pronouns"
 	"golang.org/x/oauth2"
 	"golang.org/x/text/language"
 	"net/http"
+	"net/url"
 	"time"
 )
 
 type OauthCallback interface {
-	OAuthCallback(rw http.ResponseWriter, req *http.Request, info func(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth.UserAuth, error), cookie func(rw http.ResponseWriter, authData auth.UserAuth, loginName string) bool, redirect func(rw http.ResponseWriter, req *http.Request))
+	OAuthCallback(rw http.ResponseWriter, req *http.Request, namespace string, info func(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth.UserAuth, error), cookie func(rw http.ResponseWriter, authData auth.UserAuth, loginName string) bool, redirect func(rw http.ResponseWriter, req *http.Request))
 }
 
 type flowStateData struct {
@@ -40,9 +41,9 @@ var (
 type OAuthLogin struct {
 	DB *database.Queries
 
-	BaseUrl *url.URL
-
-	flow *cache.Cache[string, flowStateData]
+	BaseUrl *utils.URL
+	flow    *cache.Cache[string, flowStateData]
+	Manager *issuer.Manager
 }
 
 func (o OAuthLogin) Init() {
@@ -50,7 +51,7 @@ func (o OAuthLogin) Init() {
 }
 
 func (o OAuthLogin) authUrlBase(ref string) *url.URL {
-	return o.BaseUrl.Resolve("oauth", o.Name(), ref)
+	return o.BaseUrl.Resolve("oauth", o.Name(), ref).URL
 }
 
 func (o OAuthLogin) AccessState() process.State { return process.StateUnauthorized }
@@ -83,10 +84,14 @@ func (o OAuthLogin) AttemptLogin(ctx authContext.FormContext) error {
 	return auth.RedirectError{Target: nextUrl, Code: http.StatusFound}
 }
 
-func (o OAuthLogin) OAuthCallback(rw http.ResponseWriter, req *http.Request, info func(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth.UserAuth, error), cookie func(rw http.ResponseWriter, authData auth.UserAuth, loginName string) bool, redirect func(rw http.ResponseWriter, req *http.Request)) {
+func (o OAuthLogin) OAuthCallback(rw http.ResponseWriter, req *http.Request, namespace string, info func(req *http.Request, sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth.UserAuth, error), cookie func(rw http.ResponseWriter, authData auth.UserAuth, loginName string) bool, redirect func(rw http.ResponseWriter, req *http.Request)) {
 	flowState, ok := o.flow.Get(req.FormValue("state"))
 	if !ok {
 		http.Error(rw, "Invalid flow state", http.StatusBadRequest)
+		return
+	}
+	if flowState.sso.Namespace != namespace {
+		http.Error(rw, "OAuth source mismatch", http.StatusBadRequest)
 		return
 	}
 	token, err := flowState.sso.OAuth2Config.Exchange(context.Background(), req.FormValue("code"), oauth2.SetAuthURLParam("redirect_uri", o.authUrlBase("callback").String()))
@@ -112,15 +117,30 @@ func (o OAuthLogin) OAuthCallback(rw http.ResponseWriter, req *http.Request, inf
 }
 
 func (o OAuthLogin) RenderButtonTemplate(ctx authContext.TemplateContext) {
+	// TODO: idk what this is
 	// o.authUrlBase("button")
 	// provide something non-nil
 	ctx.Render(struct {
 		Href       string
 		ButtonName string
 	}{
-		Href:       o.authUrlBase("button").String(),
+		Href:       o.authUrlBase("start").String(),
 		ButtonName: "Login with Unknown OAuth Button", // TODO: actually get the service name
 	})
+}
+
+// RedirectToAuthorize returns true when redirecting to the authorize endpoint
+// for the requested namespace.
+func (o OAuthLogin) RedirectToAuthorize(rw http.ResponseWriter, req *http.Request, namespace string) bool {
+	oidc := o.Manager.GetService(namespace)
+	if oidc == nil {
+		return false
+	}
+
+	// TODO: come back to fix this
+	oidc.OAuth2Config.AuthCodeURL("state")
+	//	http.Redirect(rw, req, oidc.AuthorizationEndpoint, http.StatusOK)
+	return true
 }
 
 type oauthServiceLogin int
@@ -256,7 +276,7 @@ func (o OAuthLogin) updateOAuth2UserProfile(ctx context.Context, tx *database.Qu
 }
 
 func (o OAuthLogin) fetchUserInfo(sso *issuer.WellKnownOIDC, token *oauth2.Token) (auth.UserAuth, error) {
-	res, err := sso.OAuth2Config.Client(context.Background(), token).Get(sso.UserInfoEndpoint)
+	res, err := sso.OAuth2Config.Client(context.Background(), token).Get(sso.UserInfoEndpoint.String())
 	if err != nil || res.StatusCode != http.StatusOK {
 		return auth.UserAuth{}, fmt.Errorf("request failed")
 	}

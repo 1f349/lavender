@@ -1,92 +1,80 @@
 package issuer
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/1f349/lavender/database"
 	"github.com/1f349/lavender/utils"
 	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
+	"sync/atomic"
+	"time"
 )
 
-var httpGet = http.Get
-
-// SsoConfig is the base URL for an OAUTH/OPENID/SSO login service
-// The path `/.well-known/openid-configuration` should be available
-type SsoConfig struct {
-	Addr            utils.JsonUrl   `json:"addr" yaml:"addr"`           // https://login.example.com
-	Namespace       string          `json:"namespace" yaml:"namespace"` // example.com
-	Registration    bool            `json:"registration" yaml:"registration"`
-	LoginWithButton bool            `json:"login_with_button" yaml:"loginWithButton"`
-	Client          SsoConfigClient `json:"client" yaml:"client"`
+type WellKnownOIDC struct {
+	Namespace              string               `json:"-"`
+	Config                 database.OauthSource `json:"-"`
+	Available              atomic.Bool          `json:"-"`
+	Issuer                 string               `json:"issuer"`
+	AuthorizationEndpoint  *utils.URL           `json:"authorization_endpoint"`
+	TokenEndpoint          *utils.URL           `json:"token_endpoint"`
+	UserInfoEndpoint       *utils.URL           `json:"userinfo_endpoint"`
+	ResponseTypesSupported []string             `json:"response_types_supported"`
+	ScopesSupported        []string             `json:"scopes_supported"`
+	ClaimsSupported        []string             `json:"claims_supported"`
+	GrantTypesSupported    []string             `json:"grant_types_supported"`
+	JwksUri                *utils.URL           `json:"jwks_uri"`
+	OAuth2Config           oauth2.Config        `json:"-"`
+	LastFetch              time.Time            `json:"-"`
 }
 
-type SsoConfigClient struct {
-	ID     string   `json:"id"`
-	Secret string   `json:"secret"`
-	Scopes []string `json:"scopes"`
-}
-
-func (s SsoConfig) FetchConfig() (*WellKnownOIDC, error) {
+func fetchConfig(ctx context.Context, httpClient *http.Client, s database.OauthSource) (*WellKnownOIDC, error) {
 	// generate openid config url
-	u := s.Addr.JoinPath(".well-known/openid-configuration")
+	u := s.Address.JoinPath(".well-known/openid-configuration")
 
 	// fetch metadata
-	get, err := httpGet(u.String())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
-	defer get.Body.Close()
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 
 	var c WellKnownOIDC
-	err = json.NewDecoder(get.Body).Decode(&c)
+	err = json.NewDecoder(resp.Body).Decode(&c)
 	if err != nil {
 		return nil, err
 	}
 	c.Config = s
 	c.OAuth2Config = oauth2.Config{
-		ClientID:     c.Config.Client.ID,
-		ClientSecret: c.Config.Client.Secret,
+		ClientID:     c.Config.ClientID,
+		ClientSecret: c.Config.ClientSecret,
 		Endpoint: oauth2.Endpoint{
-			AuthURL:   c.AuthorizationEndpoint,
-			TokenURL:  c.TokenEndpoint,
+			AuthURL:   c.AuthorizationEndpoint.String(),
+			TokenURL:  c.TokenEndpoint.String(),
 			AuthStyle: oauth2.AuthStyleInHeader,
 		},
-		Scopes: c.Config.Client.Scopes,
+		Scopes: strings.Fields(c.Config.ClientScopes),
 	}
+	c.Available.Store(true)
 	return &c, nil
 }
 
-type WellKnownOIDC struct {
-	Namespace              string        `json:"-"`
-	Config                 SsoConfig     `json:"-"`
-	Issuer                 string        `json:"issuer"`
-	AuthorizationEndpoint  string        `json:"authorization_endpoint"`
-	TokenEndpoint          string        `json:"token_endpoint"`
-	UserInfoEndpoint       string        `json:"userinfo_endpoint"`
-	ResponseTypesSupported []string      `json:"response_types_supported"`
-	ScopesSupported        []string      `json:"scopes_supported"`
-	ClaimsSupported        []string      `json:"claims_supported"`
-	GrantTypesSupported    []string      `json:"grant_types_supported"`
-	OAuth2Config           oauth2.Config `json:"-"`
-}
-
-func (o WellKnownOIDC) Validate() error {
+func (o *WellKnownOIDC) Validate() error {
 	if o.Issuer == "" {
 		return errors.New("missing issuer")
-	}
-
-	// check URLs are valid
-	if _, err := url.Parse(o.AuthorizationEndpoint); err != nil {
-		return err
-	}
-	if _, err := url.Parse(o.TokenEndpoint); err != nil {
-		return err
-	}
-	if _, err := url.Parse(o.UserInfoEndpoint); err != nil {
-		return err
 	}
 
 	// check oidc supported values
@@ -107,6 +95,6 @@ func (o WellKnownOIDC) Validate() error {
 	return nil
 }
 
-func (o WellKnownOIDC) ValidReturnUrl(u *url.URL) bool {
-	return o.Config.Addr.Scheme == u.Scheme && o.Config.Addr.Host == u.Host
+func (o *WellKnownOIDC) ValidReturnUrl(u *url.URL) bool {
+	return o.Config.Address.Scheme == u.Scheme && o.Config.Address.Host == u.Host
 }

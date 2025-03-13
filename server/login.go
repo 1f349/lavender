@@ -309,7 +309,15 @@ func (h *httpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Re
 		return err
 	}
 
-	sso := h.manager.FindServiceFromLogin(refreshData.Claims.Login)
+	_, namespace, err := utils.ParseLoginName(refreshData.Claims.Login)
+	if err != nil {
+		return err
+	}
+
+	sso := h.manager.GetService(namespace)
+	if sso == nil {
+		return fmt.Errorf("invalid namespace: %s", namespace)
+	}
 
 	var oauthToken *oauth2.Token
 

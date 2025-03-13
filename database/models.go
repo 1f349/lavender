@@ -10,6 +10,7 @@ import (
 
 	"github.com/1f349/lavender/database/types"
 	"github.com/1f349/lavender/password"
+	"github.com/1f349/lavender/utils"
 	"github.com/hardfinhq/go-date"
 )
 
@@ -23,6 +24,16 @@ type ClientStore struct {
 	Public       bool   `json:"public"`
 	Sso          bool   `json:"sso"`
 	Active       bool   `json:"active"`
+}
+
+type OauthSource struct {
+	Namespace    string    `json:"namespace"`
+	Address      utils.URL `json:"address"`
+	Registration bool      `json:"registration"`
+	Button       bool      `json:"button"`
+	ClientID     string    `json:"client_id"`
+	ClientSecret string    `json:"client_secret"`
+	ClientScopes string    `json:"client_scopes"`
 }
 
 type Role struct {

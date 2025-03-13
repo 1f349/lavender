@@ -29,3 +29,5 @@ sql:
             go_type: "database/sql.NullString"
           - column: "users.token_expiry"
             go_type: "database/sql.NullTime"
+          - column: "oauth_sources.address"
+            go_type: "github.com/1f349/lavender/utils.URL"
