@@ -180,12 +180,47 @@ func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 
 	// TODO: idk why login process data isn't working properly
 	processData = formContext.GetLoginProcessData()
-	if h.setLoginProcessCookie(rw, processData) {
-		return
+
+	// if the state is basic and the user has no OTP secret or OTP digits then skip OTP
+	if processData.State == process.StateBasic {
+		var user *database.User
+		if processData.Subject != "" {
+			userRaw, err := h.db.GetUser(req.Context(), processData.Subject)
+			if err == nil {
+				user = &userRaw
+			}
+		}
+		if user != nil && user.OtpSecret == "" && user.OtpDigits == 0 {
+			processData.State = process.StateAuthenticated
+		}
 	}
 
-	// TODO: figure this out
-	logger.Logger.Debug("POST /login: form render data: ", formContext.Data())
+	switch processData.State {
+	case process.StateAuthenticated:
+		// set the access and refresh tokens
+		if h.setLoginDataCookie(rw, auth.UserAuth{
+			Subject:  processData.Subject,
+			Factor:   processData.State,
+			UserInfo: auth.UserInfoFields{},
+		}, processData.Email) {
+			return
+		}
+
+	case process.StateSudo:
+		// sudo is not implemented yet
+		logger.Logger.Error("Hit StateSudo")
+		http.Error(rw, "This should not be possible yet", http.StatusNotImplemented)
+		return
+
+	default:
+		// update the process state
+		if h.setLoginProcessCookie(rw, processData) {
+			return
+		}
+	}
+
+	// TODO: figure this out (not sure what?)
+	logger.Logger.Debug("POST /login: form render data", "data", formContext.Data())
 	http.Redirect(rw, req, h.conf.BaseUrl.JoinPath("login").String(), http.StatusFound)
 }
 
