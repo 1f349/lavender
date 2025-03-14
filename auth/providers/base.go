@@ -10,6 +10,7 @@ import (
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/logger"
 	"github.com/1f349/lavender/utils"
+	"github.com/gobuffalo/nulls"
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"net/http"
@@ -140,9 +141,9 @@ func (b *Base) AttemptLogin(ctx authContext.FormContext) error {
 		}
 	}
 
-	ctx.UpdateSession(process.LoginProcessData{
-		Email: loginName,
+	ctx.UpdateSession(process.UpdateLoginProcessData{
 		State: process.StateBase,
+		Email: nulls.NewString(loginName),
 	})
 
 	return nil

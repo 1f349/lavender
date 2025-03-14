@@ -66,6 +66,10 @@ func (o *OtpLogin) AttemptLogin(ctx authContext.FormContext) error {
 	if !validateTotp(user.OtpSecret, int(user.OtpDigits), code) {
 		return auth.BasicUserSafeError(http.StatusBadRequest, "invalid OTP code")
 	}
+
+	ctx.UpdateSession(process.UpdateLoginProcessData{
+		State: process.StateAuthenticated,
+	})
 	return nil
 }
 

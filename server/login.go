@@ -50,8 +50,8 @@ func (h *httpServer) getAuthWithState(state process.State) auth.Provider {
 	return nil
 }
 
-func (h *httpServer) renderAuthTemplate(req *http.Request, provider auth.Form, processData process.LoginProcessData) (template.HTML, error) {
-	tmpCtx := authContext.NewTemplateContext(req, new(database.User), processData)
+func (h *httpServer) renderAuthTemplate(req *http.Request, provider auth.Form, processData process.LoginProcessData, user *database.User) (template.HTML, error) {
+	tmpCtx := authContext.NewTemplateContext(req, user, processData)
 
 	err := provider.RenderTemplate(tmpCtx)
 	if err != nil {
@@ -72,13 +72,16 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 	}
 
 	var processData process.LoginProcessData
+	var user *database.User
 
 	jwtCookie, err := readJwtCookie[process.LoginProcessData](req, "lavender-login-process", h.signingKey.KeyStore())
 	if err == nil {
 		processData = jwtCookie.Claims
+		user = h.resolveUser(req.Context(), processData)
 	}
 
 	// TODO: some of this should be more like tulip
+	fmt.Println("Starting login process with data", "process", processData)
 
 	buttonCtx := authContext.NewTemplateContext(req, new(database.User), processData)
 
@@ -100,15 +103,29 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 
 	// Maybe the admin has disabled some login providers but does have a button based provider available?
 	form, ok := provider.(auth.Form)
-	if provider != nil && ok {
-		renderTemplate, err = h.renderAuthTemplate(req, form, processData)
-		if err != nil {
-			logger.Logger.Warn("No provider for login")
-			web.RenderPageTemplate(rw, "login-error", struct {
-				Error string `json:"error"`
-			}{Error: "No available provider for login"})
-			return
-		}
+	if provider == nil || !ok {
+		logger.Logger.Warn("Provider does not support forms", "state", processData.State, "provider", provider)
+		web.RenderPageTemplate(rw, "login-error", struct {
+			ServiceName string `json:"service_name"`
+			Error       string `json:"error"`
+		}{
+			ServiceName: h.conf.ServiceName,
+			Error:       "No available provider for login",
+		})
+		return
+	}
+
+	renderTemplate, err = h.renderAuthTemplate(req, form, processData, user)
+	if err != nil {
+		logger.Logger.Warn("renderAuthTemplate()", "state", processData.State, "provider", provider.Name(), "err", err)
+		web.RenderPageTemplate(rw, "login-error", struct {
+			ServiceName string `json:"service_name"`
+			Error       string `json:"error"`
+		}{
+			ServiceName: h.conf.ServiceName,
+			Error:       "No available provider for login",
+		})
+		return
 	}
 
 	// render different page sources
@@ -129,6 +146,7 @@ func (h *httpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 	}
 
 	var processData process.LoginProcessData
+
 	jwtCookie, err := readJwtCookie[process.LoginProcessData](req, "lavender-login-process", h.signingKey.KeyStore())
 	if err == nil {
 		processData = jwtCookie.Claims
@@ -346,6 +364,17 @@ func (h *httpServer) readLoginRefreshCookie(rw http.ResponseWriter, req *http.Re
 	if h.setLoginDataCookie(rw, *userAuth, refreshData.Claims.Login) {
 		http.Error(rw, "Failed to save login cookie", http.StatusInternalServerError)
 		return fmt.Errorf("failed to save login cookie: %w", ErrAuthHttpError)
+	}
+	return nil
+}
+
+func (h *httpServer) resolveUser(ctx context.Context, data process.LoginProcessData) *database.User {
+	// resolve database.User struct
+	if data.Subject != "" {
+		userRaw, err := h.db.GetUser(ctx, data.Subject)
+		if err == nil {
+			return &userRaw
+		}
 	}
 	return nil
 }

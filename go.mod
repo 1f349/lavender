@@ -11,6 +11,7 @@ require (
 	github.com/cloudflare/tableflip v1.2.3
 	github.com/emersion/go-message v0.18.2
 	github.com/go-oauth2/oauth2/v4 v4.5.2
+	github.com/gobuffalo/nulls v0.4.2
 	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/golang-migrate/migrate/v4 v4.18.1
 	github.com/google/subcommands v1.2.0
@@ -42,6 +43,7 @@ require (
 	github.com/emersion/go-smtp v0.21.3 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.4 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/gofrs/uuid v4.2.0+incompatible // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect

@@ -19,7 +19,7 @@ func NewFormContext(req *http.Request, user *database.User, rw http.ResponseWrit
 type FormContext interface {
 	TemplateContext
 	SetUser(user *database.User)
-	UpdateSession(data process.LoginProcessData)
+	UpdateSession(update process.UpdateLoginProcessData)
 	GetLoginProcessData() process.LoginProcessData
 	ResponseWriter() http.ResponseWriter
 	__formContext()
@@ -39,7 +39,9 @@ func (b *BaseFormContext) GetLoginProcessData() process.LoginProcessData { retur
 
 func (b *BaseFormContext) SetUser(user *database.User) { b.BaseTemplateContext.user = user }
 
-func (b *BaseFormContext) UpdateSession(data process.LoginProcessData) { b.loginProcessData = data }
+func (b *BaseFormContext) UpdateSession(data process.UpdateLoginProcessData) {
+	b.loginProcessData = b.loginProcessData.Merge(data)
+}
 
 func (b *BaseFormContext) ResponseWriter() http.ResponseWriter { return b.rw }
 

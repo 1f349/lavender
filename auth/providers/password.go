@@ -8,6 +8,7 @@ import (
 	"github.com/1f349/lavender/auth/authContext"
 	"github.com/1f349/lavender/auth/process"
 	"github.com/1f349/lavender/database"
+	"github.com/gobuffalo/nulls"
 	"net/http"
 )
 
@@ -64,9 +65,10 @@ func (p *PasswordLogin) AttemptLogin(ctx authContext.FormContext) error {
 			return err
 		}
 		ctx.SetUser(&user)
-		ctx.UpdateSession(process.LoginProcessData{
+		ctx.UpdateSession(process.UpdateLoginProcessData{
 			State:   process.StateBasic,
-			Email:   un,
+			Email:   nulls.NewString(un),
+			Subject: nulls.NewString(user.Subject),
 		})
 		return nil
 	case errors.Is(err, sql.ErrNoRows):
