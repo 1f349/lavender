@@ -22,6 +22,7 @@ type otpLoginDB interface {
 }
 
 var _ auth.Provider = (*OtpLogin)(nil)
+var _ auth.Form = (*OtpLogin)(nil)
 
 type OtpLogin struct {
 	DB otpLoginDB
@@ -29,9 +30,9 @@ type OtpLogin struct {
 
 func (o *OtpLogin) AccessState() process.State { return process.StateBasic }
 
-func (o *OtpLogin) Name() string { return "basic" }
+func (o *OtpLogin) Name() string { return "otp" }
 
-func (o *OtpLogin) RenderTemplate(ctx authContext.FormContext) error {
+func (o *OtpLogin) RenderTemplate(ctx authContext.TemplateContext) error {
 	user := ctx.User()
 	if user == nil || user.Subject == "" {
 		return fmt.Errorf("requires previous factor")
