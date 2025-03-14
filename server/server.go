@@ -93,7 +93,7 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, mailSender *mail.Mail, 
 	authOAuth := &providers.OAuthLogin{DB: db, BaseUrl: config.BaseUrl, Manager: hs.manager}
 	authOAuth.Init()
 	authPasskey := &providers.PasskeyLogin{DB: db}
-	authInitial := &providers.InitialLogin{DB: db, MyNamespace: config.Namespace, Manager: hs.manager, OAuth: authOAuth}
+	authInitial := &providers.Base{DB: db, MyNamespace: config.Namespace, Manager: hs.manager, OAuth: authOAuth}
 
 	hs.authSources = []auth.Provider{
 		authInitial,

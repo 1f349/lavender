@@ -19,21 +19,21 @@ import (
 
 const memoryCookieName = "lavender-user-memory"
 
-var _ auth.Provider = (*InitialLogin)(nil)
-var _ auth.Form = (*InitialLogin)(nil)
+var _ auth.Provider = (*Base)(nil)
+var _ auth.Form = (*Base)(nil)
 
-type InitialLogin struct {
+type Base struct {
 	DB          *database.Queries
 	MyNamespace string
 	Manager     *issuer.Manager
 	OAuth       *OAuthLogin
 }
 
-func (m *InitialLogin) AccessState() process.State { return process.StateUnauthorized }
+func (b *Base) AccessState() process.State { return process.StateUnauthorized }
 
-func (m *InitialLogin) Name() string { return "base" }
+func (b *Base) Name() string { return "base" }
 
-func (m *InitialLogin) RenderTemplate(ctx authContext.TemplateContext) error {
+func (b *Base) RenderTemplate(ctx authContext.TemplateContext) error {
 	type s struct {
 		LoginNameMemory bool
 		UserEmail       string
@@ -58,7 +58,7 @@ func (m *InitialLogin) RenderTemplate(ctx authContext.TemplateContext) error {
 	return nil
 }
 
-func (m *InitialLogin) AttemptLogin(ctx authContext.FormContext) error {
+func (b *Base) AttemptLogin(ctx authContext.FormContext) error {
 	req := ctx.Request()
 	rw := ctx.ResponseWriter()
 
@@ -104,7 +104,7 @@ func (m *InitialLogin) AttemptLogin(ctx authContext.FormContext) error {
 
 	// append local namespace if @ is missing
 	if !strings.ContainsRune(loginName, '@') {
-		loginName += "@" + m.MyNamespace
+		loginName += "@" + b.MyNamespace
 	}
 
 	user, namespace, err := utils.ParseLoginName(loginName)
@@ -113,7 +113,7 @@ func (m *InitialLogin) AttemptLogin(ctx authContext.FormContext) error {
 		return fmt.Errorf("invalid login name %s", loginName)
 	}
 
-	login := m.Manager.GetService(namespace)
+	login := b.Manager.GetService(namespace)
 	if login == nil {
 		http.Error(rw, "No login service defined for this username", http.StatusBadRequest)
 		return errors.New("no login service defined for this username")
@@ -126,11 +126,11 @@ func (m *InitialLogin) AttemptLogin(ctx authContext.FormContext) error {
 
 		// save state for use later
 		state := login.Config.Namespace + ":" + uuid.NewString()
-		m.OAuth.flow.Set(state, flowStateData{loginName, login, req.PostFormValue("redirect")}, time.Now().Add(15*time.Minute))
+		b.OAuth.flow.Set(state, flowStateData{loginName, login, req.PostFormValue("redirect")}, time.Now().Add(15*time.Minute))
 
 		// generate oauth2 config and redirect to authorize URL
 		oa2conf := login.OAuth2Config
-		oa2conf.RedirectURL = m.OAuth.BaseUrl.JoinPath("callback").String()
+		oa2conf.RedirectURL = b.OAuth.BaseUrl.JoinPath("callback").String()
 		nextUrl := oa2conf.AuthCodeURL(state, oauth2.SetAuthURLParam("login_name", user))
 		return auth.RedirectError{
 			Target: nextUrl,
