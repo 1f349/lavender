@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"github.com/1f349/lavender/auth/process"
 )
 
@@ -11,4 +12,6 @@ type Provider interface {
 
 	// Name defines a string value for the provider.
 	Name() string
+
+	fmt.Stringer
 }

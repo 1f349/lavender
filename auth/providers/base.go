@@ -33,6 +33,8 @@ func (b *Base) AccessState() process.State { return process.StateUnauthorized }
 
 func (b *Base) Name() string { return "base" }
 
+func (b *Base) String() string { return "%Provider(base)" }
+
 func (b *Base) RenderTemplate(ctx authContext.TemplateContext) error {
 	type s struct {
 		LoginNameMemory bool

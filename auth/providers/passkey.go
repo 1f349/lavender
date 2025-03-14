@@ -25,6 +25,8 @@ func (p *PasskeyLogin) AccessState() process.State { return process.StateUnautho
 
 func (p *PasskeyLogin) Name() string { return "passkey" }
 
+func (p *PasskeyLogin) String() string { return "%Provider(passkey)" }
+
 func (p *PasskeyLogin) RenderButtonTemplate(ctx authContext.TemplateContext) {
 	// provide something non-nil
 	ctx.Render(struct{}{})

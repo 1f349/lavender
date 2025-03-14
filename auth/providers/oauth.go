@@ -58,6 +58,8 @@ func (o OAuthLogin) AccessState() process.State { return process.StateUnauthoriz
 
 func (o OAuthLogin) Name() string { return "oauth" }
 
+func (o OAuthLogin) String() string { return "%Provider(oauth)" }
+
 func (o OAuthLogin) AttemptLogin(ctx authContext.FormContext) error {
 	rCtx := ctx.Context()
 

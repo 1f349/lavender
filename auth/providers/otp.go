@@ -32,6 +32,8 @@ func (o *OtpLogin) AccessState() process.State { return process.StateBasic }
 
 func (o *OtpLogin) Name() string { return "otp" }
 
+func (o *OtpLogin) String() string { return "%Provider(otp)" }
+
 func (o *OtpLogin) RenderTemplate(ctx authContext.TemplateContext) error {
 	user := ctx.User()
 	if user == nil || user.Subject == "" {

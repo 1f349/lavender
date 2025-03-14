@@ -29,6 +29,8 @@ func (p *PasswordLogin) AccessState() process.State { return process.StateBase }
 
 func (p *PasswordLogin) Name() string { return "password" }
 
+func (p *PasswordLogin) String() string { return "%Provider(password)" }
+
 func (p *PasswordLogin) RenderTemplate(ctx authContext.TemplateContext) error {
 	// TODO(melon): rewrite this
 	req := ctx.Request()
