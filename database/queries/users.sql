@@ -21,15 +21,15 @@ LIMIT 1;
 -- name: GetUserRoles :many
 SELECT r.role
 FROM users_roles
-         INNER JOIN roles r on r.id = users_roles.role_id
-         INNER JOIN users u on u.id = users_roles.user_id
+       INNER JOIN roles r on r.id = users_roles.role_id
+       INNER JOIN users u on u.id = users_roles.user_id
 WHERE u.subject = ?;
 
 -- name: UserHasRole :exec
 SELECT 1
 FROM roles
-         INNER JOIN users_roles on users_roles.user_id = roles.id
-         INNER JOIN users u on u.id = users_roles.user_id = u.id
+       INNER JOIN users_roles on users_roles.user_id = roles.id
+       INNER JOIN users u on u.id = users_roles.user_id = u.id
 WHERE roles.role = ?
   AND u.subject = ?;
 

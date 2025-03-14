@@ -14,8 +14,8 @@ LIMIT 50 OFFSET ?;
 -- name: GetUsersRoles :many
 SELECT r.role, u.id
 FROM users_roles
-         INNER JOIN roles r on r.id = users_roles.role_id
-         INNER JOIN users u on u.id = users_roles.user_id
+       INNER JOIN roles r on r.id = users_roles.role_id
+       INNER JOIN users u on u.id = users_roles.user_id
 WHERE u.id in sqlc.slice(user_ids);
 
 -- name: ChangeUserActive :exec
