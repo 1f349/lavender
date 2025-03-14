@@ -32,11 +32,12 @@ CREATE TABLE users
   refresh_token   TEXT     NULL     DEFAULT NULL,
   token_expiry    DATETIME NULL     DEFAULT NULL,
 
+  two_factor      TEXT     NOT NULL DEFAULT '',
+
   otp_secret      TEXT     NOT NULL DEFAULT '',
   otp_digits      INTEGER  NOT NULL DEFAULT 0,
 
-  to_delete       BOOLEAN  NOT NULL DEFAULT 0,
-  need_factor     BOOLEAN  NOT NULL DEFAULT 0
+  to_delete       BOOLEAN  NOT NULL DEFAULT 0
 );
 
 CREATE INDEX users_subject ON users (subject);
