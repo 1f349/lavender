@@ -46,6 +46,7 @@ type httpServer struct {
 	authSources        []auth.Provider
 	authButtons        []auth.Button
 	formProviderLookup map[string]auth.Form
+	authByAccessState  map[process.State][]auth.Provider
 }
 
 type flowStateData struct {
@@ -145,6 +146,7 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, mailSender *mail.Mail, 
 	// build slices and maps for quick access to auth interfaces
 	hs.authButtons = make([]auth.Button, 0)
 	hs.formProviderLookup = make(map[string]auth.Form)
+	hs.authByAccessState = make(map[process.State][]auth.Provider)
 	for _, source := range hs.authSources {
 		if button, isButton := source.(auth.Button); isButton {
 			hs.authButtons = append(hs.authButtons, button)
@@ -153,6 +155,8 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, mailSender *mail.Mail, 
 		if form, isForm := source.(auth.Form); isForm {
 			hs.formProviderLookup[form.Name()] = form
 		}
+
+		hs.authByAccessState[source.AccessState()] = append(hs.authByAccessState[source.AccessState()], source)
 	}
 
 	SetupOpenId(r, config.BaseUrl, signingKey)
