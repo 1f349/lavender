@@ -13,6 +13,7 @@ import (
 	"github.com/1f349/lavender/issuer"
 	"github.com/1f349/lavender/logger"
 	"github.com/1f349/lavender/mail"
+	"github.com/1f349/lavender/passkey"
 	"github.com/1f349/lavender/utils"
 	"github.com/1f349/lavender/web"
 	"github.com/1f349/mjwt"
@@ -46,7 +47,7 @@ type httpServer struct {
 	authSources        []auth.Provider
 	authButtons        []auth.Button
 	formProviderLookup map[string]auth.Form
-	authByAccessState  map[process.State][]auth.Provider
+	authFormByState    map[process.State][]auth.Form
 }
 
 type flowStateData struct {
@@ -89,11 +90,14 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, mailSender *mail.Mail, 
 		logger.Logger.Fatal("Failed to load SSO services", "err", err)
 	}
 
+	passkeySerivce := passkey.New(nil) // TODO: change to db
+
 	authPassword := &providers.PasswordLogin{DB: db}
 	authOtp := &providers.OtpLogin{DB: db}
 	authOAuth := &providers.OAuthLogin{DB: db, BaseUrl: config.BaseUrl, Manager: hs.manager}
 	authOAuth.Init()
-	authPasskey := &providers.PasskeyLogin{DB: db}
+	authPasskeyDirect := &providers.PasskeyDirect{Service: passkeySerivce}
+	authPasskeyTwoFactor := &providers.PasskeyTwoFactor{Service: passkeySerivce}
 	authInitial := &providers.Base{DB: db, MyNamespace: config.Namespace, Manager: hs.manager, OAuth: authOAuth}
 
 	hs.authSources = []auth.Provider{
@@ -101,7 +105,8 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, mailSender *mail.Mail, 
 		authPassword,
 		authOtp,
 		authOAuth,
-		authPasskey,
+		authPasskeyDirect,
+		authPasskeyTwoFactor,
 	}
 
 	r.GET("/oauth/:namespace/start", func(rw http.ResponseWriter, req *http.Request, params httprouter.Params) {
@@ -146,7 +151,7 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, mailSender *mail.Mail, 
 	// build slices and maps for quick access to auth interfaces
 	hs.authButtons = make([]auth.Button, 0)
 	hs.formProviderLookup = make(map[string]auth.Form)
-	hs.authByAccessState = make(map[process.State][]auth.Provider)
+	hs.authFormByState = make(map[process.State][]auth.Form)
 	for _, source := range hs.authSources {
 		if button, isButton := source.(auth.Button); isButton {
 			hs.authButtons = append(hs.authButtons, button)
@@ -154,9 +159,8 @@ func SetupRouter(r *httprouter.Router, config conf.Conf, mailSender *mail.Mail, 
 
 		if form, isForm := source.(auth.Form); isForm {
 			hs.formProviderLookup[form.Name()] = form
+			hs.authFormByState[form.AccessState()] = append(hs.authFormByState[form.AccessState()], form)
 		}
-
-		hs.authByAccessState[source.AccessState()] = append(hs.authByAccessState[source.AccessState()], source)
 	}
 
 	SetupOpenId(r, config.BaseUrl, signingKey)

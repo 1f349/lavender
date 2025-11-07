@@ -1,33 +1,28 @@
 package providers
 
 import (
-	"context"
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
 	"github.com/1f349/lavender/auth/process"
-	"github.com/1f349/lavender/database"
+	"github.com/1f349/lavender/passkey"
 )
-
-type passkeyLoginDB interface {
-	GetUser(ctx context.Context, subject string) (database.User, error)
-}
 
 var (
-	_ auth.Provider = (*PasskeyLogin)(nil)
-	_ auth.Button   = (*PasskeyLogin)(nil)
+	_ auth.Provider = (*PasskeyDirect)(nil)
+	_ auth.Button   = (*PasskeyDirect)(nil)
 )
 
-type PasskeyLogin struct {
-	DB passkeyLoginDB
+type PasskeyDirect struct {
+	Service *passkey.Passkey
 }
 
-func (p *PasskeyLogin) AccessState() process.State { return process.StateUnauthorized }
+func (p *PasskeyDirect) AccessState() process.State { return process.StateUnauthorized }
 
-func (p *PasskeyLogin) Name() string { return "passkeyDirect" }
+func (p *PasskeyDirect) Name() string { return "passkeyDirect" }
 
-func (p *PasskeyLogin) String() string { return "%Provider(passkey)" }
+func (p *PasskeyDirect) String() string { return "%Provider(passkeyDirect)" }
 
-func (p *PasskeyLogin) RenderButtonTemplate(ctx authContext.TemplateContext) {
+func (p *PasskeyDirect) RenderButtonTemplate(ctx authContext.TemplateContext) {
 	// provide something non-nil
 	ctx.Render(struct{}{})
 }

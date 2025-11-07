@@ -47,7 +47,7 @@ func (q *Queries) FlagUserAsDeleted(ctx context.Context, subject string) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, subject, password, change_password, email, email_verified, updated_at, registered, active, name, picture, website, pronouns, birthdate, zone, locale, login, profile_url, auth_type, auth_namespace, auth_user, access_token, refresh_token, token_expiry, otp_secret, otp_digits, to_delete, need_factor
+SELECT id, subject, password, change_password, email, email_verified, updated_at, registered, active, name, picture, website, pronouns, birthdate, zone, locale, login, profile_url, auth_type, auth_namespace, auth_user, access_token, refresh_token, token_expiry, two_factor, otp_secret, otp_digits, to_delete
 FROM users
 WHERE subject = ?
 LIMIT 1
@@ -81,10 +81,10 @@ func (q *Queries) GetUser(ctx context.Context, subject string) (User, error) {
 		&i.AccessToken,
 		&i.RefreshToken,
 		&i.TokenExpiry,
+		&i.TwoFactor,
 		&i.OtpSecret,
 		&i.OtpDigits,
 		&i.ToDelete,
-		&i.NeedFactor,
 	)
 	return i, err
 }
@@ -92,8 +92,8 @@ func (q *Queries) GetUser(ctx context.Context, subject string) (User, error) {
 const getUserRoles = `-- name: GetUserRoles :many
 SELECT r.role
 FROM users_roles
-         INNER JOIN roles r on r.id = users_roles.role_id
-         INNER JOIN users u on u.id = users_roles.user_id
+       INNER JOIN roles r on r.id = users_roles.role_id
+       INNER JOIN users u on u.id = users_roles.user_id
 WHERE u.subject = ?
 `
 
@@ -135,8 +135,8 @@ func (q *Queries) HasUser(ctx context.Context) (bool, error) {
 const userHasRole = `-- name: UserHasRole :exec
 SELECT 1
 FROM roles
-         INNER JOIN users_roles on users_roles.user_id = roles.id
-         INNER JOIN users u on u.id = users_roles.user_id = u.id
+       INNER JOIN users_roles on users_roles.user_id = roles.id
+       INNER JOIN users u on u.id = users_roles.user_id = u.id
 WHERE roles.role = ?
   AND u.subject = ?
 `
@@ -217,7 +217,7 @@ func (q *Queries) changeUserPassword(ctx context.Context, arg changeUserPassword
 }
 
 const checkLogin = `-- name: checkLogin :one
-SELECT subject, password, need_factor, email, email_verified
+SELECT subject, password, two_factor, email, email_verified
 FROM users
 WHERE users.email = ?
 LIMIT 1
@@ -226,7 +226,7 @@ LIMIT 1
 type checkLoginRow struct {
 	Subject       string              `json:"subject"`
 	Password      password.HashString `json:"password"`
-	NeedFactor    bool                `json:"need_factor"`
+	TwoFactor     string              `json:"two_factor"`
 	Email         string              `json:"email"`
 	EmailVerified bool                `json:"email_verified"`
 }
@@ -237,7 +237,7 @@ func (q *Queries) checkLogin(ctx context.Context, email string) (checkLoginRow, 
 	err := row.Scan(
 		&i.Subject,
 		&i.Password,
-		&i.NeedFactor,
+		&i.TwoFactor,
 		&i.Email,
 		&i.EmailVerified,
 	)

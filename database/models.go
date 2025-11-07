@@ -66,10 +66,10 @@ type User struct {
 	AccessToken    sql.NullString      `json:"access_token"`
 	RefreshToken   sql.NullString      `json:"refresh_token"`
 	TokenExpiry    sql.NullTime        `json:"token_expiry"`
+	TwoFactor      string              `json:"two_factor"`
 	OtpSecret      string              `json:"otp_secret"`
 	OtpDigits      int64               `json:"otp_digits"`
 	ToDelete       bool                `json:"to_delete"`
-	NeedFactor     bool                `json:"need_factor"`
 }
 
 type UsersRole struct {

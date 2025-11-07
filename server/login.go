@@ -41,22 +41,11 @@ func getUserLoginName(req *http.Request) string {
 	return originUrl.Query().Get("login_name")
 }
 
-func (h *httpServer) getNextAuthProvider(state process.State, user *database.User) auth.Provider {
-	switch state {
-	case process.StateBasic:
-	default:
-		for _, i := range h.authByAccessState[state] {
-			
-		}
-	}
-
-	if state == process.StateBasic {
-
-	}
-
-	for _, i := range h.authSources {
-		if i.AccessState() == state {
-			return i
+func (h *httpServer) getNextAuthForm(state process.State, user *database.User) auth.Form {
+	for _, form := range h.authFormByState[state] {
+		// TODO: no idea what I was doing here?
+		if form.SupportsUser(user) {
+			return form
 		}
 	}
 	return nil
@@ -109,7 +98,7 @@ func (h *httpServer) loginGet(rw http.ResponseWriter, req *http.Request, _ httpr
 		}
 	}
 
-	provider := h.getNextAuthProvider(processData.State, user)
+	provider := h.getNextAuthForm(processData.State, user)
 
 	var renderTemplate template.HTML
 

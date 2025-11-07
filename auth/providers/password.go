@@ -32,6 +32,8 @@ func (p *PasswordLogin) Name() string { return "password" }
 
 func (p *PasswordLogin) String() string { return "%Provider(password)" }
 
+func (p *PasswordLogin) SupportsUser(user *database.User) bool { return user != nil && user.Password != "" }
+
 func (p *PasswordLogin) RenderTemplate(ctx authContext.TemplateContext) error {
 	// TODO(melon): rewrite this
 	req := ctx.Request()

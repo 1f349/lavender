@@ -10,7 +10,8 @@ import (
 )
 
 const getOAuthSources = `-- name: GetOAuthSources :many
-SELECT namespace, address, registration, button, client_id, client_secret, client_scopes FROM oauth_sources
+SELECT namespace, address, registration, button, client_id, client_secret, client_scopes
+FROM oauth_sources
 `
 
 func (q *Queries) GetOAuthSources(ctx context.Context) ([]OauthSource, error) {

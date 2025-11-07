@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/1f349/lavender/auth"
 	"github.com/1f349/lavender/auth/authContext"
 	"github.com/1f349/lavender/auth/process"
 	"github.com/1f349/lavender/database"
 	"github.com/xlzd/gotp"
-	"net/http"
-	"time"
 )
 
 func isDigitsSupported(digits int64) bool {
@@ -33,6 +34,10 @@ func (o *OtpLogin) AccessState() process.State { return process.StateBasic }
 func (o *OtpLogin) Name() string { return "otp" }
 
 func (o *OtpLogin) String() string { return "%Provider(otp)" }
+
+func (o *OtpLogin) SupportsUser(user *database.User) bool {
+	return user != nil && user.OtpSecret != "" && isDigitsSupported(user.OtpDigits)
+}
 
 func (o *OtpLogin) RenderTemplate(ctx authContext.TemplateContext) error {
 	user := ctx.User()

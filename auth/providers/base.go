@@ -36,6 +36,8 @@ func (b *Base) Name() string { return "base" }
 
 func (b *Base) String() string { return "%Provider(base)" }
 
+func (b *Base) SupportsUser(user *database.User) bool { return true }
+
 func (b *Base) RenderTemplate(ctx authContext.TemplateContext) error {
 	type s struct {
 		LoginNameMemory bool
