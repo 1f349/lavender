@@ -23,7 +23,7 @@ type PasskeyLogin struct {
 
 func (p *PasskeyLogin) AccessState() process.State { return process.StateUnauthorized }
 
-func (p *PasskeyLogin) Name() string { return "passkey" }
+func (p *PasskeyLogin) Name() string { return "passkeyDirect" }
 
 func (p *PasskeyLogin) String() string { return "%Provider(passkey)" }
 
