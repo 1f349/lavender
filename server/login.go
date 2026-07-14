@@ -86,7 +86,7 @@ func (h *HttpServer) loginPost(rw http.ResponseWriter, req *http.Request, _ http
 
 	// save state for use later
 	state := login.Config.Namespace + ":" + uuid.NewString()
-	h.flowState.Set(state, flowStateData{loginName, login, req.PostFormValue("redirect")}, time.Now().Add(15*time.Minute))
+	h.flowState.Set(state, flowStateData{loginName, login, req.PostFormValue("redirect")}, 15*time.Minute)
 
 	// generate oauth2 config and redirect to authorize URL
 	oa2conf := login.OAuth2Config
